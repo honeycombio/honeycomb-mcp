@@ -36,11 +36,22 @@ describe("Helper functions", () => {
       
       const topValues = getTopValues(results, "fruit", 2);
       
+      // First verify the array has the expected length
       expect(topValues).toHaveLength(2);
-      expect(topValues[0].value).toBe("apple");
-      expect(topValues[0].count).toBe(3);
-      expect(topValues[1].value).toBe("banana");
-      expect(topValues[1].count).toBe(2);
+      
+      // Then verify each element exists and has the expected properties
+      const firstItem = topValues[0];
+      const secondItem = topValues[1];
+      
+      // Use type assertions to tell TypeScript these objects exist
+      expect(firstItem).toBeDefined();
+      expect(secondItem).toBeDefined();
+      
+      // Now safely access their properties
+      expect(firstItem!.value).toBe("apple");
+      expect(firstItem!.count).toBe(3);
+      expect(secondItem!.value).toBe("banana");
+      expect(secondItem!.count).toBe(2);
     });
     
     it("handles empty results", () => {
@@ -59,9 +70,17 @@ describe("Helper functions", () => {
       ];
       
       const topValues = getTopValues(results, "val");
+      
+      // First verify the array has the expected length
       expect(topValues).toHaveLength(2);
-      expect(topValues[0].value).toBe("a");
-      expect(topValues[0].count).toBe(2);
+      
+      // Then verify the first element exists
+      const firstItem = topValues[0];
+      expect(firstItem).toBeDefined();
+      
+      // Now safely access its properties
+      expect(firstItem!.value).toBe("a");
+      expect(firstItem!.count).toBe(2);
     });
   });
 });
