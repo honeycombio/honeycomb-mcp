@@ -22,13 +22,20 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'pnpm'
     
+    # Setup PNPM - must be before setting up Node.js cache
     - name: Setup PNPM
       uses: pnpm/action-setup@v2
       with:
         version: 8
         run_install: false
+    
+    # Setup Node.js cache after PNPM is installed
+    - name: Setup Node.js cache
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
     
     - name: Get pnpm store directory
       id: pnpm-cache
