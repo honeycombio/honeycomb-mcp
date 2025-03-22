@@ -3,15 +3,23 @@
  */
 
 /**
- * Generate interpretation text for numeric statistics based on Honeycomb documentation
+ * Interface for statistics used in analysis and interpretation
  */
-export function generateInterpretation(stats: {
+export interface NumericStatistics {
   min?: number;
   max?: number;
   avg?: number;
   p95?: number;
-  [key: string]: any
-}, columnName: string): string {
+  median?: number;
+  sum?: number;
+  range?: number;
+  stdDev?: number;
+}
+
+/**
+ * Generate interpretation text for numeric statistics based on Honeycomb documentation
+ */
+export function generateInterpretation(stats: NumericStatistics, columnName: string): string {
   const interpretations = [];
   
   if (stats.avg !== undefined && stats.p95 !== undefined) {

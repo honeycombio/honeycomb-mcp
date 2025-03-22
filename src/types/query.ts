@@ -35,6 +35,13 @@ export interface QueryOrder {
   order: QueryOrderDirection;
 }
 
+export interface QueryHaving {
+  calculate_op: string;
+  column?: string;
+  op: string;
+  value: number;
+}
+
 export interface AnalysisQuery {
   calculations: QueryCalculation[];
   breakdowns?: string[];
@@ -46,17 +53,12 @@ export interface AnalysisQuery {
   start_time?: number;
   end_time?: number;
   granularity?: number;
-  having?: Array<{
-    calculate_op: string;
-    column?: string;
-    op: string;
-    value: number;
-  }>;
+  having?: QueryHaving[];
 }
 
 interface QueryResultData {
-  results?: any[];
-  series?: any[];
+  results?: QueryResultValue[];
+  series?: QuerySeriesValue[];
 }
 
 export interface QueryResult {
@@ -69,12 +71,20 @@ export interface QueryResult {
   id: string;
 }
 
+export interface QueryResultValue {
+  [key: string]: string | number | boolean | null;
+}
+
+export interface QuerySeriesValue {
+  [key: string]: string | number | boolean | null;
+}
+
 export interface QueryResponse {
   id: string;
   complete: boolean;
   data?: {
-    results: any[];
-    series: any[];
+    results: QueryResultValue[];
+    series: QuerySeriesValue[];
   };
   links?: {
     query_url?: string;

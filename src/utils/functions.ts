@@ -1,3 +1,5 @@
+import { QueryResultValue } from "../types/query.js";
+
 /**
  * Calculate standard deviation for an array of values
  */
@@ -14,9 +16,17 @@ export function calculateStdDev(values: number[], mean: number): number {
 }
 
 /**
+ * Interface for top value result items
+ */
+export interface TopValueItem<T = unknown> {
+  value: T;
+  count: number;
+}
+
+/**
  * Get top N values with their frequencies
  */
-export function getTopValues(results: any[], column: string, limit: number = 5): Array<{value: any, count: number}> {
+export function getTopValues(results: QueryResultValue[], column: string, limit: number = 5): Array<TopValueItem> {
   const valueCounts = new Map();
   
   // Count frequencies

@@ -8,7 +8,11 @@
     "sourceMap": true,
     "esModuleInterop": true,
     "noEmit": false,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noEmitOnError": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build"]

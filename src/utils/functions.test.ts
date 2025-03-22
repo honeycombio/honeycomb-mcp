@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calculateStdDev, getTopValues } from "./functions.js";
+import { QueryResultValue } from "../types/query.js";
 
 describe("Helper functions", () => {
   describe("calculateStdDev", () => {
@@ -25,7 +26,7 @@ describe("Helper functions", () => {
 
   describe("getTopValues", () => {
     it("returns top values sorted by frequency", () => {
-      const results = [
+      const results: QueryResultValue[] = [
         { fruit: "apple", count: 5 },
         { fruit: "banana", count: 2 },
         { fruit: "apple", count: 6 },
@@ -55,17 +56,18 @@ describe("Helper functions", () => {
     });
     
     it("handles empty results", () => {
-      const results: any[] = [];
+      const results: QueryResultValue[] = [];
       const topValues = getTopValues(results, "column", 5);
       expect(topValues).toHaveLength(0);
     });
 
-    it("handles null/undefined values", () => {
-      const results = [
+    it("handles null values", () => {
+      // Updated to only use null (not undefined) to match QueryResultValue type
+      const results: QueryResultValue[] = [
         { val: "a" },
         { val: null },
         { val: "b" },
-        { val: undefined },
+        { val: null },  // Changed from undefined to null
         { val: "a" },
       ];
       

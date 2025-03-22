@@ -8,7 +8,7 @@
     "honeycomb-mcp": "./build/server.js"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=build/index.mjs",
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=build/index.mjs",
     "postbuild": "chmod +x build/index.mjs",
     "prepublishOnly": "pnpm run build",
     "test": "vitest run",
