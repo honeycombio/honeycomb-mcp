@@ -6,6 +6,7 @@ import { HoneycombError } from "./errors.js";
 export async function handleToolError(
   error: unknown,
   toolName: string,
+  options: { suppressConsole?: boolean } = {}
 ): Promise<{ content: { type: "text"; text: string }[] }> {
   let errorMessage = "Unknown error occurred";
 
@@ -15,8 +16,10 @@ export async function handleToolError(
     errorMessage = error.message;
   }
 
-  // Log the error to stderr for debugging
-  console.error(`Tool '${toolName}' failed:`, error);
+  // Log the error to stderr for debugging, unless suppressed
+  if (!options.suppressConsole) {
+    console.error(`Tool '${toolName}' failed:`, error);
+  }
 
   return {
     content: [

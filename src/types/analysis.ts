@@ -34,10 +34,18 @@ export interface ValueWithPercentage {
  * Simplified column analysis result
  */
 export interface SimplifiedColumnAnalysis {
+  /** The name of the column being analyzed */
   column: string;
+  /** The number of results returned in the analysis */
   count: number;
+  /** Total number of events/records across all results */
   totalEvents: number;
+  /** Most frequent values in the column with their counts */
   topValues?: Array<ValueWithPercentage>;
+  /** Statistical information for numeric columns */
   stats?: NumericStatsWithInterpretation;
+  /** Information about how many unique values exist in the column */
   cardinality?: CardinalityInfo;
+  /** Any error that occurred during result processing */
+  processingError?: string;
 }
