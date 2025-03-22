@@ -1,3 +1,5 @@
+import { calculateStdDev, getTopValues } from "./utils/functions.js";
+
 /**
  * Types for the summary statistics
  */
@@ -7,6 +9,8 @@ interface NumericStats {
   avg: number;
   median: number;
   sum: number;
+  range?: number;
+  stdDev?: number;
 }
 
 interface CountStats {
@@ -18,6 +22,7 @@ interface CountStats {
 
 interface BreakdownStat {
   uniqueCount: number;
+  topValues?: Array<{value: any, count: number}>;
 }
 
 interface BreakdownStats {
@@ -77,7 +82,9 @@ export function summarizeResults(results: any[], params: any): ResultSummary {
             max, 
             avg,
             median,
-            sum
+            sum,
+            range: max - min,
+            stdDev: calculateStdDev(values, avg)
           } as NumericStats;
         }
       }
@@ -110,7 +117,8 @@ export function summarizeResults(results: any[], params: any): ResultSummary {
     params.breakdowns.forEach((col: string) => {
       const uniqueValues = new Set(results.map(r => r[col]));
       breakdownStats[col] = {
-        uniqueCount: uniqueValues.size
+        uniqueCount: uniqueValues.size,
+        topValues: getTopValues(results, col, 5)
       };
     });
     
