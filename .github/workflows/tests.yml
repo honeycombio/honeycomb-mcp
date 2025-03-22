@@ -1,0 +1,67 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    # Run on all pull requests, regardless of target branch
+    
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+    
+    # Setup PNPM - must be before setting up Node.js cache
+    - name: Setup PNPM
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        run_install: false
+    
+    # Setup Node.js cache after PNPM is installed
+    - name: Setup Node.js cache
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
+    
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+    
+    - uses: actions/cache@v3
+      name: Setup pnpm cache
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Run TypeScript type-checking
+      run: pnpm exec tsc --noEmit
+    
+    - name: Run tests
+      run: pnpm test
+    
+    - name: Run test with coverage
+      run: pnpm test:coverage
+      
+    - name: Build
+      run: pnpm build

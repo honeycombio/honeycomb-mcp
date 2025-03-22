@@ -439,7 +439,32 @@ async function main() {
         const result = await api.analyzeColumn(params.environment, params.dataset, params);
         
         // Simplify the response to reduce context window usage
-        const simplifiedResponse = {
+        interface SimplifiedColumnAnalysis {
+          column: string;
+          count: number;
+          totalEvents: number;
+          topValues?: Array<{
+            value: any;
+            count: number;
+            percentage: string;
+          }>;
+          stats?: {
+            min?: number;
+            max?: number;
+            avg?: number;
+            p95?: number;
+            range?: number;
+            interpretation: string;
+            [key: string]: any;
+          };
+          cardinality?: {
+            uniqueCount: number;
+            classification: string;
+          };
+          [key: string]: any; // Allow for other dynamic properties
+        }
+        
+        const simplifiedResponse: SimplifiedColumnAnalysis = {
           column: params.column,
           count: result.data?.results?.length || 0,
           totalEvents: 0,  // Will be populated below if available
@@ -451,11 +476,9 @@ async function main() {
           
           // Calculate total events across all results
           const totalCount = result.data.results.reduce((sum, row) => sum + (row.COUNT || 0), 0);
-          // @ts-ignore - dynamically adding properties
           simplifiedResponse.totalEvents = totalCount;
           
           // Add top values with their counts and percentages
-          // @ts-ignore - dynamically adding properties
           simplifiedResponse.topValues = result.data.results.map(row => ({
             value: row[params.column],
             count: row.COUNT || 0,
@@ -464,18 +487,24 @@ async function main() {
           
           // If numeric calculations were performed, add them with additional context
           const numericMetrics = ['AVG', 'P95', 'MAX', 'MIN'];
-          const numericStats = {};
+          
+          // Define the type for numericStats to match what's expected in generateInterpretation
+          const numericStats: {
+            min?: number;
+            max?: number;
+            avg?: number;
+            p95?: number;
+            [key: string]: number | undefined;
+          } = {};
           
           numericMetrics.forEach(metric => {
             if (metric in firstResult) {
-              // @ts-ignore - dynamically adding properties
               numericStats[metric.toLowerCase()] = firstResult[metric];
             }
           });
           
           if (Object.keys(numericStats).length > 0) {
             // Add distribution information if we have numeric data
-            // @ts-ignore - dynamically adding properties
             simplifiedResponse.stats = {
               ...numericStats,
               // Calculate range if we have min and max
@@ -488,7 +517,6 @@ async function main() {
           
           // Add cardinality information (number of unique values)
           const uniqueValues = new Set(result.data.results.map(row => row[params.column])).size;
-          // @ts-ignore - dynamically adding properties
           simplifiedResponse.cardinality = {
             uniqueCount: uniqueValues,
             // Classification of cardinality
@@ -679,10 +707,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
  * Generate interpretation text for numeric statistics based on Honeycomb documentation
  */
 function generateInterpretation(stats: {
-  min?: number,
-  max?: number,
-  avg?: number,
-  p95?: number,
+  min?: number;
+  max?: number;
+  avg?: number;
+  p95?: number;
   [key: string]: any
 }, columnName: string): string {
   const interpretations = [];
