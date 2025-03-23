@@ -165,6 +165,15 @@ tags:
     description: >
       This API allows you to list, create, update, and delete API Keys for a
       Team.
+
+
+
+      Learn more about [API keys
+      here](https://docs.honeycomb.io/get-started/configure/environments/manage-api-keys/).
+
+
+
+      **Note**: currently only Ingest Keys are supported.
   - name: Kinesis Events
     description: >
       The Kinesis Events API endpoints allow Honeycomb to process streaming
@@ -382,6 +391,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -446,6 +460,8 @@ paths:
                       slug: honeycomb-docs
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /2/auth:
@@ -472,6 +488,8 @@ paths:
                 $ref: '#/components/schemas/AuthV2Response'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/boards:
     post:
       security:
@@ -491,6 +509,11 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -503,6 +526,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
@@ -519,6 +544,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -527,6 +557,8 @@ paths:
                   $ref: '#/components/schemas/Board'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/boards/{boardId}:
@@ -548,6 +580,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -560,6 +597,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     put:
@@ -584,6 +623,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -596,6 +640,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -609,21 +655,28 @@ paths:
       responses:
         '204':
           description: Success - no Content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/burn_alerts/{datasetSlug}:
     parameters:
-      - $ref: '#/components/parameters/datasetSlug'
+      - $ref: '#/components/parameters/datasetSlugOrAll'
     post:
       security:
         - configuration_key: []
       summary: Create a Burn Alert
       description: |
-        Create a Burn Alert in a specified dataset against a specified SLO.
+        Create a Burn Alert against a specified SLO.
       tags:
         - Burn Alerts
       operationId: createBurnAlert
@@ -636,6 +689,11 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -646,6 +704,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
@@ -671,6 +731,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -703,11 +768,13 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/burn_alerts/{datasetSlug}/{burnAlertId}:
     parameters:
-      - $ref: '#/components/parameters/datasetSlug'
+      - $ref: '#/components/parameters/datasetSlugOrAll'
       - name: burnAlertId
         description: The unique identifier (ID) of a Burn Alert.
         in: path
@@ -726,6 +793,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -736,6 +808,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     put:
@@ -755,6 +829,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -765,6 +844,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -782,6 +863,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/datasets:
@@ -809,12 +892,22 @@ paths:
       responses:
         '200':
           description: OK - Dataset already exists
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
         '201':
           description: Created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -833,6 +926,11 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           description: Conflict
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -841,6 +939,8 @@ paths:
                 error: we could not create a dataset with that name
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
@@ -858,6 +958,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -881,6 +986,8 @@ paths:
                   regular_columns_count: 98
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/datasets/{datasetSlug}:
@@ -898,6 +1005,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -906,6 +1018,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -940,6 +1054,11 @@ paths:
       responses:
         '202':
           description: Deleted
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json: {}
         '401':
@@ -950,6 +1069,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     put:
@@ -979,6 +1100,11 @@ paths:
       responses:
         '200':
           description: Updated
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -997,6 +1123,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/batch/{datasetSlug}:
     parameters:
       - $ref: '#/components/parameters/datasetSlug'
@@ -1189,6 +1317,11 @@ paths:
       responses:
         '200':
           description: Dataset Definitions have been updated
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1216,6 +1349,11 @@ paths:
                 log_message: null
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1232,6 +1370,11 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           description: 422 Unprocessable Entity
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1253,6 +1396,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1314,7 +1462,7 @@ paths:
       requestBody:
         description: >
           The request body is limited to raw (potentially compressed) size of
-          100KB.
+          1MB.
 
 
           The maximum number of distinct columns (fields) allowed in an event is
@@ -1453,6 +1601,11 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1468,6 +1621,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
@@ -1482,6 +1637,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1503,6 +1663,8 @@ paths:
                   id: c2b52fa0
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/markers/{datasetSlug}/{markerId}:
@@ -1537,6 +1699,11 @@ paths:
       responses:
         '200':
           description: Updated
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1552,6 +1719,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -1566,6 +1735,11 @@ paths:
           description: |
             Success
             The deleted Marker will be in the body of the response.
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1581,6 +1755,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/marker_settings/{datasetSlug}:
@@ -1602,6 +1778,11 @@ paths:
       responses:
         '201':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1610,6 +1791,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     get:
       security:
         - configuration_key: []
@@ -1620,6 +1803,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1628,10 +1816,12 @@ paths:
                   $ref: '#/components/schemas/MarkerSetting'
         '404':
           $ref: '#/components/responses/NotFound'
-  /1/marker_settings/{datasetSlug}/{id}:
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /1/marker_settings/{datasetSlug}/{markerSettingId}:
     parameters:
       - $ref: '#/components/parameters/datasetSlugOrAll'
-      - name: id
+      - name: markerSettingId
         description: The unique identifier (ID) of a marker setting.
         in: path
         required: true
@@ -1658,6 +1848,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1672,6 +1867,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     delete:
       security:
         - configuration_key: []
@@ -1680,10 +1877,21 @@ paths:
         - Marker Settings
       operationId: deleteMarkerSettings
       responses:
-        '204':
+        '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkerSetting'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/queries/{datasetSlug}:
     parameters:
       - $ref: '#/components/parameters/datasetSlugOrAll'
@@ -1729,6 +1937,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1764,6 +1977,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/queries/{datasetSlug}/{queryId}:
     parameters:
       - $ref: '#/components/parameters/datasetSlugOrAll'
@@ -1785,6 +2000,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1805,6 +2025,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/query_annotations/{datasetSlug}:
     parameters:
       - $ref: '#/components/parameters/datasetSlugOrAll'
@@ -1826,12 +2048,22 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryAnnotation'
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1845,6 +2077,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
@@ -1859,6 +2093,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1867,6 +2106,8 @@ paths:
                   $ref: '#/components/schemas/QueryAnnotation'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/query_annotations/{datasetSlug}/{queryAnnotationId}:
@@ -1890,12 +2131,19 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryAnnotation'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     put:
@@ -1925,6 +2173,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1935,6 +2188,11 @@ paths:
                 query_id: mabAMpSPDjH
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -1960,6 +2218,8 @@ paths:
                     error: Query is not in the dataset
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -1974,8 +2234,15 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/query_results/{datasetSlug}:
@@ -2069,6 +2336,18 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          description: Rate Limit Exceeded
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/DetailedError'
+              example:
+                status: 429
+                type: https://api.honeycomb.io/problems/rate-limited
+                title: You have exceeded your rate limit.
+                error: You have exceeded your rate limit.
+                detail: This endpoint allows 10 requests per minute.
         default:
           $ref: '#/components/responses/GenericError'
   /1/query_results/{datasetSlug}/{queryResultId}:
@@ -2207,6 +2486,11 @@ paths:
       responses:
         '201':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2233,6 +2517,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2262,6 +2551,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2295,6 +2589,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2322,6 +2621,11 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           description: Unauthorized
           content:
@@ -2336,13 +2640,13 @@ paths:
           $ref: '#/components/responses/Conflict'
   /1/slos/{datasetSlug}:
     parameters:
-      - $ref: '#/components/parameters/datasetSlug'
+      - $ref: '#/components/parameters/datasetSlugOrAll'
     post:
       security:
         - configuration_key: []
       summary: Create an SLO
       description: |
-        Create an SLO on the provided dataset
+        Create an SLO on the provided dataset.
       tags:
         - SLOs
       operationId: createSlo
@@ -2350,15 +2654,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SLO'
+              $ref: '#/components/schemas/SLOCreate'
         required: true
       responses:
         '201':
           description: Success - SLO created
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SLO'
+                $ref: '#/components/schemas/SLOCreate'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2367,19 +2676,28 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     get:
       security:
         - configuration_key: []
       summary: Get all SLOs
-      description: Get all SLOs for a dataset
+      description: >
+        Get all SLOs for a dataset. This action returns any SLOs, including
+        those applied with multiple datasets.
       tags:
         - SLOs
       operationId: listSlos
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2392,11 +2710,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/slos/{datasetSlug}/{sloId}:
     parameters:
-      - $ref: '#/components/parameters/datasetSlug'
+      - $ref: '#/components/parameters/datasetSlugOrAll'
       - name: sloId
         description: Unique identifier (ID) of the SLO.
         in: path
@@ -2429,6 +2749,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2449,6 +2774,8 @@ paths:
                     reset_at: '2022-10-15T13:53:11Z'
                     created_at: '2022-09-15T05:39:42Z'
                     updated_at: '2022-12-20T08:10:05Z'
+                    dataset_slugs:
+                      - mydataset1
                 get-slo-detailed:
                   description: Get SLO by ID with detailed response
                   value:
@@ -2464,12 +2791,16 @@ paths:
                     reset_at: '2022-10-15T13:53:11Z'
                     created_at: '2022-09-15T05:39:42Z'
                     updated_at: '2022-12-20T08:10:05Z'
+                    dataset_slugs:
+                      - mydataset1
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     put:
@@ -2492,6 +2823,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2504,6 +2840,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     delete:
@@ -2518,12 +2856,19 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/triggers/{datasetSlug}:
@@ -2541,6 +2886,11 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2553,6 +2903,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
     post:
@@ -2578,6 +2930,10 @@ paths:
               schema:
                 type: string
               description: Relative path to fetch this trigger via API.
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2594,6 +2950,8 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/triggers/{datasetSlug}/{triggerId}:
     parameters:
       - $ref: '#/components/parameters/datasetSlug'
@@ -2615,6 +2973,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2623,6 +2986,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     put:
       security:
         - configuration_key: []
@@ -2642,6 +3007,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2654,6 +3024,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     delete:
       security:
         - configuration_key: []
@@ -2667,10 +3039,17 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/recipients/{recipientId}/triggers:
     parameters:
       - $ref: '#/components/parameters/recipientId'
@@ -2689,6 +3068,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2699,6 +3083,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/GenericError'
   /1/derived_columns/{datasetSlug}:
@@ -2724,6 +3110,11 @@ paths:
       responses:
         '201':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2745,6 +3136,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     get:
       security:
         - configuration_key: []
@@ -2768,6 +3161,11 @@ paths:
             When listing all columns, an array of DerivedColumn objects will be
             returned. When using `key_name`, will return a single DerivedColumn
             object if found.
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2780,6 +3178,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/derived_columns/{datasetSlug}/{derivedColumnId}:
     parameters:
       - $ref: '#/components/parameters/datasetSlugOrAll'
@@ -2799,6 +3199,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2816,6 +3221,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     put:
       security:
         - configuration_key: []
@@ -2834,6 +3241,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2846,6 +3258,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     delete:
       security:
         - configuration_key: []
@@ -2860,6 +3274,11 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2868,6 +3287,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/columns/{datasetSlug}:
     parameters:
       - $ref: '#/components/parameters/datasetSlug'
@@ -2889,6 +3310,11 @@ paths:
       responses:
         '201':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2904,6 +3330,11 @@ paths:
                 updated_at: '2022-07-26T22:38:04Z'
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2920,6 +3351,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     get:
       security:
         - configuration_key: []
@@ -2940,6 +3373,11 @@ paths:
             When listing all columns, an array of Column objects will be
             returned. When using `key_name`, will return a single Column object
             if found.
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -2983,6 +3421,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /1/columns/{datasetSlug}/{columnId}:
     parameters:
       - $ref: '#/components/parameters/datasetSlug'
@@ -3002,6 +3442,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -3017,6 +3462,11 @@ paths:
                 updated_at: '2022-07-26T22:38:04Z'
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -3029,6 +3479,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     put:
       security:
         - configuration_key: []
@@ -3047,6 +3499,11 @@ paths:
       responses:
         '200':
           description: Success
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -3062,6 +3519,11 @@ paths:
                 updated_at: '2022-07-26T22:38:04Z'
         '400':
           description: Bad Request
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
           content:
             application/json:
               schema:
@@ -3074,6 +3536,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     delete:
       security:
         - configuration_key: []
@@ -3088,6 +3552,11 @@ paths:
       responses:
         '204':
           description: Success - no content
+          headers:
+            Ratelimit:
+              $ref: '#/components/headers/RateLimit'
+            RateLimitPolicy:
+              $ref: '#/components/headers/RateLimitPolicy'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -3096,6 +3565,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /2/teams/{teamSlug}/api-keys:
     parameters:
       - $ref: '#/components/parameters/teamSlug'
@@ -3106,6 +3577,10 @@ paths:
       tags:
         - Key Management
       summary: List all API Keys
+      description: |
+        List all API Keys for a Team.
+
+        **Note**: currently only keys of type `ingest` will be returned.
       operationId: listApiKeys
       parameters:
         - $ref: '#/components/parameters/PaginationCursor'
@@ -3143,7 +3618,7 @@ paths:
       summary: Create an API Key
       description: >
         This creates an API Key, which will return the API Key components in the
-        response. The Key ID will be found at `data.id` and 
+        response. The Key ID will be found at `data.id` and
 
         the Key Secret will be found at `data.attributes.secret`. For security
         reasons the Key Secret will only be available during creation so make
@@ -3151,7 +3626,7 @@ paths:
 
 
         To use a newly-created Ingest Key it should be passed in the
-        `X-Honeycomb-Team` header with the API Key's ID and secret 
+        `X-Honeycomb-Team` header with the API Key's ID and secret
 
         concatenated (and with no separator). For example, `X-Honeycomb-Team:
         hcxik_1234567890123456789012345612345678901234567890123456789012`
@@ -3207,6 +3682,10 @@ paths:
       tags:
         - Key Management
       summary: Get an API Key
+      description: |
+        Fetches an API Key.
+
+        **Note**: currently only keys of type `ingest` are supported.
       operationId: getApiKey
       responses:
         '200':
@@ -3237,6 +3716,10 @@ paths:
       tags:
         - Key Management
       summary: Update an API Key
+      description: |
+        Updates an API Key.
+
+        **Note**: currently only keys of type `ingest` are supported.
       operationId: updateApiKey
       requestBody:
         required: true
@@ -3281,9 +3764,12 @@ paths:
       tags:
         - Key Management
       summary: Delete an API Key
-      description: >-
+      description: >
         This deletes and immediately deactivates the API Key. This is an
         irreversible operation.
+
+
+        **Note**: currently only keys of type `ingest` are supported.
       operationId: deleteApiKey
       responses:
         '204':
@@ -3591,7 +4077,7 @@ components:
         in UTC time.
       schema:
         type: string
-      example: '2024-03-22T18:37:83Z'
+      example: '2024-03-22T18:37:53Z'
     ETag:
       description: >
         The ETag header is a response header that allows a client to cache the
@@ -3610,7 +4096,7 @@ components:
             $ref: '#/components/schemas/DetailedError'
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     Forbidden:
       description: Forbidden
       content:
@@ -3629,9 +4115,14 @@ components:
             $ref: '#/components/schemas/DetailedError'
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     NotFound:
       description: Not Found
+      headers:
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/json:
           schema:
@@ -3649,9 +4140,14 @@ components:
             detail: Dataset not found
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     Conflict:
       description: Conflict
+      headers:
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/json:
           schema:
@@ -3670,7 +4166,7 @@ components:
             error: A resource by that name already exists.
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     PayloadTooLarge:
       description: The provided request body was over the maximum allowed size.
       content:
@@ -3687,7 +4183,7 @@ components:
       content:
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     Unauthorized:
       description: Unauthorized
       content:
@@ -3698,9 +4194,14 @@ components:
             error: unknown API key - check your credentials
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     UnprocessableEntity:
       description: Invalid request
+      headers:
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/problem+json:
           schema:
@@ -3709,10 +4210,12 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     BadRequest:
-      description: >
-        The provided request body was invalid. Most APIs will return a
-        DetailedError for this condition, explaining what went wrong, but some
-        older APIs only return a GenericError.
+      description: The provided request body was invalid.
+      headers:
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/problem+json:
           schema:
@@ -3731,8 +4234,24 @@ components:
             GenericError:
               value:
                 error: invalid Query data
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JSONAPIError'
+          examples:
+            JSONAPIError:
+              value:
+                errors:
+                  - id: 06dcdd6508ca822f0e7e2bb4121c1f52
+                    code: invalid
+                    title: request body could not be parsed
+                    detail: invalid gzip data
     ValidationFailed:
       description: Validation Failed
+      headers:
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/problem+json:
           schema:
@@ -3751,7 +4270,7 @@ components:
             $ref: '#/components/schemas/Error'
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
     GenericError:
       description: Error
       content:
@@ -3759,19 +4278,38 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     RateLimited:
-      description: RateLimited
+      description: Rate Limit Exceeded
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
+        Ratelimit:
+          $ref: '#/components/headers/RateLimit'
+        RateLimitPolicy:
+          $ref: '#/components/headers/RateLimitPolicy'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
           example:
             error: Rate Limited
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/DetailedError'
+          example:
+            status: 429
+            type: https://api.honeycomb.io/problems/rate-limited
+            title: You have exceeded your rate limit.
+            error: You have exceeded your rate limit.
+            detail: Please try again after 2025-02-01T15:23:12Z.
         application/vnd.api+json:
           schema:
-            $ref: '#/components/schemas/JSONAPIErrors'
+            $ref: '#/components/schemas/JSONAPIError'
+          example:
+            errors:
+              - id: 06dcdd6508ca822f0e7e2bb4121c1f52
+                code: rate-limited/may-retry
+                title: request rate limit exceeded
+                detail: Please try again after 2025-02-01T15:23:12Z.
   schemas:
     Error:
       x-tags:
@@ -3782,7 +4320,7 @@ components:
         error:
           type: string
           readOnly: true
-    JSONAPIErrors:
+    JSONAPIError:
       x-tags:
         - Errors
       type: object
@@ -3862,6 +4400,74 @@ components:
           type: string
           readOnly: true
           description: The unique identifier (ID) for this specific error.
+    RateLimitedError:
+      x-tags:
+        - Errors
+      description: >
+        You have exceeded your assigned limit for the requested API action.
+
+
+        Honeycomb supports two response formats for rate limited errors:
+
+          * JSON:API errors are in use for 'V2' API endpoints.
+          * RFC7807 'Problem Detail' errors are in use for 'V1' API endpoints.
+
+        In either case, an HTTP 429 'Rate Limited' response will include the
+        RFC7231 `Retry-After` header with the time at which you may retry the
+        request,
+
+        with the exception of the Query Data, and Events and OpenTelemetry
+        ingestion APIs.
+
+        In the case of the Query Data, and Events and OpenTelemetry ingestion
+        APIs, the `Retry-After` header is not included in the Rate Limited
+        response.
+
+
+        In addition to the `Retry-After` header when rate limiting is in effect,
+
+        the API response may include `RateLimit` and `RateLimitPolicy` headers
+        with detailed information about your limits for that type of
+        interaction.
+
+        The documentation for the specific endpoint will indicate if these
+        headers are included in the response.
+      oneOf:
+        - $ref: '#/components/schemas/RateLimitedProblem'
+        - $ref: '#/components/schemas/RateLimitedJSONAPI'
+      examples:
+        - RateLimited V1:
+            status: 429
+            type: https://api.honeycomb.io/problems/rate-limited
+            title: You have exceeded your rate limit.
+            error: You have exceeded your rate limit.
+            detail: Please try again after 2025-02-01T15:23:12Z.
+        - RateLimited V2: null
+          errors:
+            - id: 06dcdd6508ca822f0e7e2bb4121c1f52
+              code: rate-limited/may-retry
+              title: request rate limit exceeded
+              detail: Please try again after 2025-02-01T15:23:12Z.
+    RateLimitedProblem:
+      description: An RFC7807 'Problem Detail' formatted Rate Limited error.
+      allOf:
+        - $ref: '#/components/schemas/DetailedError'
+      example:
+        status: 429
+        type: https://api.honeycomb.io/problems/rate-limited
+        title: You have exceeded your rate limit.
+        error: You have exceeded your rate limit.
+        detail: Please try again after 2025-02-01T15:23:12Z.
+    RateLimitedJSONAPI:
+      description: An JSON:API formatted Rate Limited error.
+      allOf:
+        - $ref: '#/components/schemas/JSONAPIError'
+      example:
+        errors:
+          - id: 06dcdd6508ca822f0e7e2bb4121c1f52
+            code: rate-limited/may-retry
+            title: request rate limit exceeded
+            detail: Please try again after 2025-02-01T15:23:12Z.
     ValidationError:
       x-tags:
         - Errors
@@ -3936,7 +4542,7 @@ components:
 
           ### Limits
 
-          - 2,000 fields per event. The entire event must be less than 100KB of
+          - 2,000 fields per event. The entire event must be less than 1 MB of
           uncompressed JSON.
 
           - String Fields: Each string field has a maximum length of 64KB.
@@ -4088,9 +4694,12 @@ components:
           example: context for this query
         graph_settings:
           type: object
+          deprecated: true
           description: >
             A map of boolean values to control the display settings for the
             Query on the Board. Unspecified values are assumed to be `false`.
+            This is incompatible with the `visualization_settings` field.
+            Deprecated: use visualization_settings instead.
           properties:
             hide_markers:
               type: boolean
@@ -4148,6 +4757,53 @@ components:
             for the Query. The Query Annotation must apply to the `query_id` or
             `query` specified.
           example: e4c24a35
+        visualization_settings:
+          type: object
+          description: >
+            A map of values to control the display settings for the Query on the
+            Board. Unspecified boolean values are assumed to be `false`.
+            Unspecified integers are assumed to be `0`, unspecified arrays are
+            assumed to be null and unspecified strings are assumed to be empty.
+            This is incompatible with the `graph_settings` field.
+          properties:
+            hide_compare:
+              type: boolean
+              default: false
+            hide_hovers:
+              type: boolean
+              default: false
+            hide_markers:
+              type: boolean
+              default: false
+            utc_xaxis:
+              type: boolean
+              default: false
+            overlaid_charts:
+              type: boolean
+              default: false
+            charts:
+              type: array
+              items:
+                type: object
+                properties:
+                  chart_index:
+                    type: integer
+                    default: 0
+                  chart_type:
+                    type: string
+                    enum:
+                      - default
+                      - line
+                      - stacked
+                      - stat
+                      - tsbar
+                    default: default
+                  log_scale:
+                    type: boolean
+                    default: false
+                  omit_missing_values:
+                    type: boolean
+                    default: false
     ColumnList:
       type: array
       items:
@@ -4618,8 +5274,7 @@ components:
             The target of the notification. For example, the specific Slack
             channel or email address.
 
-            For Recipients of `type = "webhook"` or `type =
-            "msteams_workflow"`, 
+            For Recipients of `type = "webhook"` or `type = "msteams_workflow"`,
 
             this will be the Name in the UI and `webhook_name` in the Recipients
             API.
@@ -4642,6 +5297,25 @@ components:
             - error
             - warning
             - info
+        variables:
+          description: >
+            When using a Recipient of `type = "webhook"`, the alert-level
+            variables can be specified.
+          type: array
+          items:
+            type: object
+            required:
+              - name
+            properties:
+              name:
+                type: string
+                pattern: ^[a-z](?:[a-zA-Z0-9]+$)?$
+                maxLength: 64
+                example: severity
+              value:
+                type: string
+                maxLength: 256
+                example: warning
     FilterOp:
       type: string
       enum:
@@ -4696,6 +5370,10 @@ components:
         - RATE_AVG
         - RATE_SUM
         - RATE_MAX
+    UpdatePipelineConfigurationRolloutResponse:
+      type: object
+      required:
+        - data
     QueryOp:
       type: string
       enum:
@@ -4890,12 +5568,12 @@ components:
           description: A name for the Query.
           example: My Named Query
           minLength: 1
-          maxLength: 80
+          maxLength: 320
         description:
           type: string
           description: A description of the Query.
           example: A nice description of My Named Query
-          maxLength: 280
+          maxLength: 1023
         query_id:
           type: string
           description: >
@@ -4938,19 +5616,34 @@ components:
           type: boolean
           writeOnly: true
           description: >
-            If true, will disable calculation and return of the full time-series
-            data, usually included in the 'series' response field, instead only
-            returning the summarized 'results'.
+            If `true`, timeseries data will not be returned in the `series`
+            response field, and only summarized data will be returned in the
+            `results` response field.
+          default: false
+        disable_total_by_aggregate:
+          type: boolean
+          writeOnly: true
+          description: >
+            If `true`, data representing each aggregate in the query's total
+            value will not be returned. Ensure `disable_series` is false to
+            return the timeseries data.
+          default: true
+        disable_other_by_aggregate:
+          type: boolean
+          default: true
+          writeOnly: true
+          description: >
+            If true, the "other_by_aggregate" data is excluded from the query
+            result.
         limit:
           type: integer
           writeOnly: true
           maximum: 10000
           description: >
-            If 'disable_series' is true, then a limit may optionally be given,
-            which will override the limit normally associated with the query.
-            Unlike normal query results which are limited to 1_000 results,
-            'disable_series' results may have a limit of up to 10_000. If
-            'disable_series' is false, then this field will be ignored.
+            If `disable_series` is `true`, a limit may be optionally given. The
+            limit will override the default limit of 1_000 results with a
+            maximum available limit of 10_000. If `disable_series` is `false`,
+            this field will be ignored.
     QueryResult:
       type: object
       description: A Query Result is created with the Query ID.
@@ -5060,6 +5753,32 @@ components:
                 UI below the graph)
               items:
                 $ref: '#/components/schemas/QueryResultsData'
+            total_by_aggregate:
+              $ref: '#/components/schemas/QueryResultsData'
+              description: >
+                An object containing each aggregate in the query mapped to its
+                total value across all groups. Aggregate values do not respect
+                any Having clauses included in a query. Only available if query
+                was run with `disable_total_by_aggregate` set to `false`.
+            total_by_aggregate_series:
+              type: array
+              description: >
+                Timeseries data showing the total value of each aggregate
+                returned in `total_by_aggregate` across the time range.
+                Aggregate values returned do not respect any Having clauses
+                included in a query. Only available if both
+                `disable_total_by_aggregate` and `disable_series` are set to
+                `false`.
+              items:
+                $ref: '#/components/schemas/QueryResultsSeries'
+            other_by_aggregate:
+              $ref: '#/components/schemas/QueryResultsData'
+              description: >
+                An object containing each aggregate in the query mapped to its
+                value for the groups not included in the query limit. Aggregate
+                values do not respect any Having clauses included in a query.
+                Only available if query was run with
+                `disable_other_by_aggregate` set to `false`.
         links:
           type: object
           description: >-
@@ -5232,6 +5951,15 @@ components:
                 - webhook_url
               description: Specific schema for the Webhook Recipient Type
               properties:
+                webhook_headers:
+                  type: array
+                  maxLength: 5
+                  description: Custom headers for this webhook
+                  items:
+                    $ref: '#/components/schemas/WebhookHeader'
+                  example:
+                    - header: Authorization
+                      value: Bearer xyz123
                 webhook_name:
                   type: string
                   maxLength: 255
@@ -5247,6 +5975,59 @@ components:
                   description: Webhook secret.
                   maxLength: 255
                   example: secret
+                webhook_payloads:
+                  type: object
+                  description: Specify a custom webhook payload.
+                  properties:
+                    template_variables:
+                      type: array
+                      maxLength: 10
+                      description: Custom variable definitions for this webhook
+                      items:
+                        $ref: '#/components/schemas/TemplateVariableDefinition'
+                      example:
+                        - name: severity
+                          default_value: CRITICAL
+                    payload_templates:
+                      type: object
+                      properties:
+                        trigger:
+                          $ref: '#/components/schemas/PayloadTemplate'
+                        budget_rate:
+                          $ref: '#/components/schemas/PayloadTemplate'
+                        exhaustion_time:
+                          $ref: '#/components/schemas/PayloadTemplate'
+    WebhookHeader:
+      type: object
+      required:
+        - header
+      properties:
+        header:
+          type: string
+          maxLength: 64
+        value:
+          type: string
+          maxLength: 512
+    TemplateVariableDefinition:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z](?:[a-zA-Z0-9]+$)?$
+          maxLength: 64
+          example: severity
+        default_value:
+          type: string
+          maxLength: 256
+          example: CRITICAL
+    PayloadTemplate:
+      type: object
+      properties:
+        body:
+          type: string
+          example: '{ \"alert\": \"{{.Alert.Description}}\" }'
     Recipient:
       discriminator:
         propertyName: type
@@ -5473,6 +6254,89 @@ components:
       allOf:
         - $ref: '#/components/schemas/TriggerWithInlineQuery'
         - $ref: '#/components/schemas/TriggerWithQueryReference'
+    SLOCreate:
+      type: object
+      required:
+        - name
+        - time_period_days
+        - target_per_million
+        - sli
+      properties:
+        id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          description: The name of the SLO.
+          minLength: 1
+          maxLength: 120
+          example: My SLO
+        description:
+          type: string
+          description: A nice description of the SLO's intent and context.
+          minLength: 0
+          maxLength: 1023
+          example: SLO to ensure requests succeed and are fast
+        sli:
+          type: object
+          description: >-
+            Reference to the [Derived Column](/api/derived-columns/) used as the
+            indicator of event success.
+          required:
+            - alias
+          properties:
+            alias:
+              type: string
+              description: The alias of the derived column.
+              minLength: 1
+              maxLength: 255
+          example:
+            alias: error_sli
+        time_period_days:
+          type: integer
+          description: The time period, in days, over which the SLO will be evaluated.
+          minimum: 1
+          example: 30
+        target_per_million:
+          type: integer
+          description: >-
+            The number of events out of one million (1,000,000) that you
+            expected qualified events to succeed.
+          minimum: 0
+          maximum: 999999
+          example: 990000
+        reset_at:
+          type:
+            - 'null'
+            - string
+          format: date-time
+          description: >-
+            The ISO8601-formatted time the SLO was last reset. The value will be
+            `null` if the SLO has not yet been reset.
+          readOnly: true
+          example: 2022-011-11T09:53:04Z
+        created_at:
+          type: string
+          description: The ISO8601-formatted time when the SLO was created.
+          format: date-time
+          readOnly: true
+          example: '2022-09-22T17:32:11Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: The ISO8601-formatted time when the SLO was updated.
+          readOnly: true
+          example: '2022-10-31T15:08:11Z'
+        dataset_slugs:
+          type: array
+          description: >-
+            The dataset(s) the SLO will be evaluated against. Required if using
+            `__all__` in the path.
+          minItems: 1
+          maxItems: 10
+          example:
+            - mydataset1
+            - mydataset2
     SLO:
       type: object
       required:
@@ -5546,6 +6410,17 @@ components:
           description: The ISO8601-formatted time when the SLO was updated.
           readOnly: true
           example: '2022-10-31T15:08:11Z'
+        dataset_slugs:
+          type: array
+          description: >-
+            The dataset(s) the SLO will be evaluated against. Required if using
+            `__all__` in the path.
+          readOnly: true
+          minItems: 1
+          maxItems: 10
+          example:
+            - mydataset1
+            - mydataset2
     SLODetailedResponse:
       allOf:
         - $ref: '#/components/schemas/SLO'
@@ -5641,14 +6516,14 @@ components:
               type: integer
               minimum: 0
               description: >
-                Required when `alert_type` is `exhaustion_time`. 
+                Required when `alert_type` is `exhaustion_time`.
 
 
                 Must not be specified when `alert_type` is `budget_rate`.
 
 
                 Amount of time (in minutes) left until your projected SLO budget
-                is exhausted. 
+                is exhausted.
 
                 The alert will fire when this exhaustion threshold is reached.
               example: 120
@@ -5783,14 +6658,14 @@ components:
               minimum: 1
               maximum: 1000000
               description: >
-                Required when `alert_type` is `budget_rate`. 
+                Required when `alert_type` is `budget_rate`.
 
 
                 Must not be specified when `alert_type` is `exhaustion_time`.
 
 
                 The percent the budget has decreased over the budget rate
-                window, represented as a value out of one million. 
+                window, represented as a value out of one million.
 
                 The alert will fire when this budget decrease threshold is
                 reached.
@@ -6500,7 +7375,7 @@ components:
       in: header
       description: >
         A Honeycomb Ingest Key is required to use this API. The Ingest Key is
-        the concatenation of the Ingest Key ID and the Ingest Key Secret. 
+        the concatenation of the Ingest Key ID and the Ingest Key Secret.
 
         For security reasons the Ingest Key Secret will only be available during
         creation of the Ingest Key while the Ingest Key ID will always be
