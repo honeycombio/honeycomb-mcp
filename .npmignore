@@ -4,3 +4,4 @@ tsconfig.json
 .env.*
 .hny/
 api.yaml
+.mcp-honeycomb.json

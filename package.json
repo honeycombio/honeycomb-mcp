@@ -1,5 +1,5 @@
 {
-  "name": "@aparkerio/honeycomb-mcp",
+  "name": "@honeycombio/honeycomb-mcp",
   "version": "0.0.1",
   "description": "Model Context Protocol server for Honeycomb",
   "type": "module",
@@ -25,7 +25,7 @@
     "LICENSE"
   ],
   "keywords": [],
-  "author": "Austin Parker <austin@ap2.io> (http://aparker.io)",
+  "author": "Honeycomb <support@honeycomb.io> (https://www.honeycomb.io/)",
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.4.7",
