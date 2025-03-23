@@ -7,13 +7,15 @@ import { createListSLOsTool } from "./list-slos.js";
 import { createGetSLOTool } from "./get-slo.js";
 import { createListTriggersTool } from "./list-triggers.js";
 import { createGetTriggerTool } from "./get-trigger.js";
+import { MCPServer } from "../types/mcp.js";
 
 /**
  * Register all tools with the MCP server
- * @param server The MCP server instance
- * @param api The Honeycomb API client
+ * 
+ * @param server - The MCP server instance
+ * @param api - The Honeycomb API client
  */
-export function registerTools(server: any, api: HoneycombAPI) {
+export function registerTools(server: MCPServer, api: HoneycombAPI) {
   const tools = [
     createListDatasetsTool(api),
     createGetColumnsTool(api),
@@ -27,7 +29,8 @@ export function registerTools(server: any, api: HoneycombAPI) {
 
   // Register each tool with the server
   for (const tool of tools) {
-    server.tool(
+    // Use type assertion to make TypeScript happy with the MCP SDK
+    (server as any).tool(
       tool.name,
       tool.schema,
       tool.handler

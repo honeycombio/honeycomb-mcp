@@ -5,6 +5,7 @@ import { HoneycombAPI } from "./api/client.js";
 import process from "node:process";
 import { registerResources } from "./resources/index.js";
 import { registerTools } from "./tools/index.js";
+import { MCPServer } from "./types/mcp.js";
 
 /**
  * Main function to run the Honeycomb MCP server
@@ -21,8 +22,8 @@ async function main() {
   });
 
   // Register resources and tools
-  registerResources(server, api);
-  registerTools(server, api);
+  registerResources(server as unknown as MCPServer, api);
+  registerTools(server as unknown as MCPServer, api);
 
   // Create transport and start server
   const transport = new StdioServerTransport();

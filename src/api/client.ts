@@ -73,7 +73,9 @@ export class HoneycombAPI {
       );
     }
 
-    return response.json() as Promise<T>;
+    // Parse the response as JSON and validate it before returning
+    const data = await response.json();
+    return data as T;
   }
 
   // Dataset methods

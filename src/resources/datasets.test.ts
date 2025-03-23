@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleDatasetResource } from './datasets.js';
-import { HoneycombError } from '../utils/errors.js';
 
 // We'll skip testing the resourceTemplate creation directly since it uses 
 // an external library that's hard to mock in these tests. Instead, we'll 

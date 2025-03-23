@@ -2,6 +2,7 @@ import { calculateStdDev, getTopValues, TopValueItem } from "./functions.js";
 import { QueryResultValue } from "../types/query.js";
 import { z } from "zod";
 import { QueryToolSchema } from "../types/schema.js";
+import { isValidNumber } from "./typeguards.js";
 
 /**
  * Types for the summary statistics
@@ -68,11 +69,7 @@ export function summarizeResults(results: QueryResultValue[], params: z.infer<ty
         // Filter to ensure we only have numeric values
         const values = results
           .map(r => r[colName])
-          .filter((v): v is number => 
-            v !== null && 
-            v !== undefined && 
-            typeof v === 'number'
-          );
+          .filter(isValidNumber);
           
         if (values.length > 0) {
           const min = Math.min(...values);
@@ -104,8 +101,8 @@ export function summarizeResults(results: QueryResultValue[], params: z.infer<ty
             }
           }
           
-          // Now properly typed
-          summary[colName] = { 
+          // Create a properly typed NumericStats object
+          const stats: NumericStats = { 
             min, 
             max, 
             avg,
@@ -113,7 +110,8 @@ export function summarizeResults(results: QueryResultValue[], params: z.infer<ty
             sum,
             range: max - min,
             stdDev: calculateStdDev(values, avg)
-          } as NumericStats;
+          };
+          summary[colName] = stats;
         }
       }
     });
@@ -124,11 +122,7 @@ export function summarizeResults(results: QueryResultValue[], params: z.infer<ty
       // Filter to ensure we only have numeric values
       const countValues = results
         .map(r => r.COUNT)
-        .filter((v): v is number => 
-          v !== null && 
-          v !== undefined && 
-          typeof v === 'number'
-        );
+        .filter(isValidNumber);
         
       if (countValues.length > 0) {
         const totalCount = countValues.reduce((a, b) => a + b, 0);
