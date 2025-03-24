@@ -275,3 +275,55 @@ export const DatasetConfigSchema = z.object({
 export const ConfigSchema = z.object({
   datasets: z.array(DatasetConfigSchema),
 });
+
+/**
+ * Schema for listing boards
+ */
+export const ListBoardsSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+});
+
+/**
+ * Schema for getting a specific board
+ */
+export const GetBoardSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  boardId: z.string().describe("The ID of the board to retrieve"),
+});
+
+/**
+ * Schema for marker type
+ */
+export const MarkerTypeSchema = z.enum([
+  "deploy", "feature", "incident", "other"
+]);
+
+/**
+ * Schema for listing markers
+ */
+export const ListMarkersSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+});
+
+/**
+ * Schema for getting a specific marker
+ */
+export const GetMarkerSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  markerId: z.string().describe("The ID of the marker to retrieve"),
+});
+
+/**
+ * Schema for listing recipients
+ */
+export const ListRecipientsSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+});
+
+/**
+ * Schema for getting a specific recipient
+ */
+export const GetRecipientSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  recipientId: z.string().describe("The ID of the recipient to retrieve"),
+});

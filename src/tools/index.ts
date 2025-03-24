@@ -3,6 +3,10 @@ import { createListDatasetsTool } from "./list-datasets.js";
 import { createGetColumnsTool } from "./get-columns.js";
 import { createRunQueryTool } from "./run-query.js";
 import { createAnalyzeColumnTool } from "./analyze-column.js";
+import { createListBoardsTool } from "./list-boards.js";
+import { createGetBoardTool } from "./get-board.js";
+import { createListMarkersTool } from "./list-markers.js";
+import { createListRecipientsTool } from "./list-recipients.js";
 import { createListSLOsTool } from "./list-slos.js";
 import { createGetSLOTool } from "./get-slo.js";
 import { createListTriggersTool } from "./list-triggers.js";
@@ -17,12 +21,29 @@ import { MCPServer } from "../types/mcp.js";
  */
 export function registerTools(server: MCPServer, api: HoneycombAPI) {
   const tools = [
+    // Dataset tools
     createListDatasetsTool(api),
     createGetColumnsTool(api),
+    
+    // Query tools
     createRunQueryTool(api),
     createAnalyzeColumnTool(api),
+    
+    // Board tools
+    createListBoardsTool(api),
+    createGetBoardTool(api),
+    
+    // Marker tools
+    createListMarkersTool(api),
+    
+    // Recipient tools
+    createListRecipientsTool(api),
+    
+    // SLO tools
     createListSLOsTool(api),
     createGetSLOTool(api),
+    
+    // Trigger tools
     createListTriggersTool(api),
     createGetTriggerTool(api)
   ];

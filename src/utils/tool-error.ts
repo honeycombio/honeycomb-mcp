@@ -7,7 +7,10 @@ export async function handleToolError(
   error: unknown,
   toolName: string,
   options: { suppressConsole?: boolean } = {}
-): Promise<{ content: { type: "text"; text: string }[] }> {
+): Promise<{
+  content: { type: "text"; text: string }[];
+  error: { message: string; };
+}> {
   let errorMessage = "Unknown error occurred";
 
   if (error instanceof HoneycombError) {
@@ -33,5 +36,8 @@ export async function handleToolError(
           `- Your query parameters are valid\n`,
       },
     ],
+    error: {
+      message: errorMessage
+    }
   };
 }
