@@ -24,25 +24,25 @@ export function registerTools(server: MCPServer, api: HoneycombAPI) {
     // Dataset tools
     createListDatasetsTool(api),
     createGetColumnsTool(api),
-    
+
     // Query tools
     createRunQueryTool(api),
     createAnalyzeColumnTool(api),
-    
+
     // Board tools
     createListBoardsTool(api),
     createGetBoardTool(api),
-    
+
     // Marker tools
     createListMarkersTool(api),
-    
+
     // Recipient tools
     createListRecipientsTool(api),
-    
+
     // SLO tools
     createListSLOsTool(api),
     createGetSLOTool(api),
-    
+
     // Trigger tools
     createListTriggersTool(api),
     createGetTriggerTool(api)

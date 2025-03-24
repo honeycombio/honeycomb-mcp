@@ -120,6 +120,66 @@ function validateQueryParameters(params: z.infer<typeof QueryToolSchema>): void 
 }
 
 /**
+ * Helper function to execute a query and process the results
+ */
+async function executeQuery(
+  api: HoneycombAPI, 
+  params: z.infer<typeof QueryToolSchema>,
+  hasHeatmap: boolean
+) {
+  // Execute the query
+  const result = await api.runAnalysisQuery(params.environment, params.dataset, params);
+  
+  try {
+    // Simplify the response to reduce context window usage
+    const simplifiedResponse = {
+      results: result.data?.results || [],
+      // Only include series data if heatmap calculation is present (it's usually large)
+      ...(hasHeatmap ? { series: result.data?.series || [] } : {}),
+      
+      // Include a query URL if available 
+      query_url: result.links?.query_url || null,
+      
+      // Add summary statistics for numeric columns
+      summary: summarizeResults(result.data?.results || [], params),
+      
+      // Add query metadata for context
+      metadata: {
+        environment: params.environment,
+        dataset: params.dataset,
+        executedAt: new Date().toISOString(),
+        resultCount: result.data?.results?.length || 0
+      }
+    };
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(simplifiedResponse, null, 2),
+        },
+      ],
+    };
+  } catch (processingError) {
+    // Handle result processing errors separately to still return partial results
+    console.error("Error processing query results:", processingError);
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            results: result.data?.results || [],
+            query_url: result.links?.query_url || null,
+            error: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`
+          }, null, 2),
+        },
+      ],
+    };
+  }
+}
+
+/**
  * Creates a tool for running queries against a Honeycomb dataset
  * 
  * This tool handles construction, validation, execution, and summarization of
@@ -146,56 +206,27 @@ export function createRunQueryTool(api: HoneycombAPI) {
         // Check for heatmap calculations to determine if series data should be included
         const hasHeatmap = params.calculations.some(calc => calc.op === "HEATMAP");
 
-        // Execute the query
-        const result = await api.runAnalysisQuery(params.environment, params.dataset, params);
+        // Execute the query with retry logic for transient API issues
+        const maxRetries = 3;
+        let lastError: unknown = null;
         
-        try {
-          // Simplify the response to reduce context window usage
-          const simplifiedResponse = {
-            results: result.data?.results || [],
-            // Only include series data if heatmap calculation is present (it's usually large)
-            ...(hasHeatmap ? { series: result.data?.series || [] } : {}),
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            return await executeQuery(api, params, hasHeatmap);
+          } catch (error) {
+            lastError = error;
+            console.error(`Query attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`);
             
-            // Include a query URL if available 
-            query_url: result.links?.query_url || null,
-            
-            // Add summary statistics for numeric columns
-            summary: summarizeResults(result.data?.results || [], params),
-            
-            // Add query metadata for context
-            metadata: {
-              environment: params.environment,
-              dataset: params.dataset,
-              executedAt: new Date().toISOString(),
-              resultCount: result.data?.results?.length || 0
+            // Only retry if not the last attempt
+            if (attempt < maxRetries) {
+              console.error(`Retrying in ${attempt * 500}ms...`);
+              await new Promise(resolve => setTimeout(resolve, attempt * 500));
             }
-          };
-          
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(simplifiedResponse, null, 2),
-              },
-            ],
-          };
-        } catch (processingError) {
-          // Handle result processing errors separately to still return partial results
-          console.error("Error processing query results:", processingError);
-          
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  results: result.data?.results || [],
-                  query_url: result.links?.query_url || null,
-                  error: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`
-                }, null, 2),
-              },
-            ],
-          };
+          }
         }
+        
+        // If we get here, all attempts failed
+        throw lastError || new Error("All query attempts failed");
       } catch (error) {
         return handleToolError(error, "run_query");
       }

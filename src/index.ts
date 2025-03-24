@@ -21,14 +21,47 @@ async function main() {
     version: "1.0.0"
   });
 
+  // Add a small delay to ensure the server is fully initialized before registering tools
+  console.error("Initializing MCP server...");
+  await new Promise(resolve => setTimeout(resolve, 500));
+
   // Register resources and tools
+  console.error("Registering resources and tools...");
   registerResources(server as unknown as MCPServer, api);
   registerTools(server as unknown as MCPServer, api);
 
+  // Wait for tool registration to complete
+  await new Promise(resolve => setTimeout(resolve, 500));
+  console.error("All resources and tools registered");
+
   // Create transport and start server
   const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Honeycomb MCP Server running on stdio");
+  
+  // Add reconnect logic to handle connection issues
+  let connected = false;
+  const maxRetries = 3;
+  let retries = 0;
+  
+  while (!connected && retries < maxRetries) {
+    try {
+      await server.connect(transport);
+      connected = true;
+      console.error("Honeycomb MCP Server running on stdio");
+    } catch (error) {
+      retries++;
+      console.error(`Connection attempt ${retries} failed: ${error instanceof Error ? error.message : String(error)}`);
+      
+      if (retries < maxRetries) {
+        console.error(`Retrying in 1 second...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.error(`Max retries (${maxRetries}) reached. Server may be unstable.`);
+        // Continue anyway, but warn about potential issues
+        console.error("Honeycomb MCP Server running with potential connection issues");
+        break;
+      }
+    }
+  }
 }
 
 // Run main with proper error handling
