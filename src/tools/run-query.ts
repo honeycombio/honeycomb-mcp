@@ -83,10 +83,39 @@ function validateQueryParameters(params: z.infer<typeof QueryToolSchema>): void 
     }
   }
   
-  // Handle time parameters
+  // Handle time parameters based on Honeycomb API specifications
+  
+  // 1. Validate time-related parameters
   if (params.start_time && params.end_time && params.time_range) {
     // Cannot have all three
     throw new Error("Cannot specify time_range, start_time, and end_time simultaneously. Use time_range with either start_time or end_time, or use start_time and end_time without time_range.");
+  }
+  
+  // 2. Validate granularity parameter
+  if (params.granularity !== undefined) {
+    // When using granularity, we need a time window (either time_range or start_time+end_time)
+    if (!params.time_range && !(params.start_time && params.end_time)) {
+      throw new Error("When using granularity, you must specify either time_range or both start_time and end_time to define the time window.");
+    }
+    
+    // Granularity must be a positive integer
+    if (params.granularity <= 0 || !Number.isInteger(params.granularity)) {
+      throw new Error("Granularity value must be a positive integer representing seconds.");
+    }
+    
+    // Validate granularity isn't too small for the time window
+    if (params.time_range && params.granularity < Math.max(1, Math.floor(params.time_range / 300))) {
+      // For larger time ranges, granularity shouldn't create too many data points (max ~300 points is reasonable)
+      throw new Error(`Granularity value (${params.granularity}s) is too small for the requested time range (${params.time_range}s). This would create too many data points for the API to process efficiently.`);
+    }
+    
+    // For start_time/end_time combination
+    if (params.start_time && params.end_time) {
+      const timeWindowSeconds = Math.abs(params.end_time - params.start_time);
+      if (params.granularity < Math.max(1, Math.floor(timeWindowSeconds / 300))) {
+        throw new Error(`Granularity value (${params.granularity}s) is too small for the requested time window (${timeWindowSeconds}s). This would create too many data points for the API to process efficiently.`);
+      }
+    }
   }
 }
 

@@ -247,6 +247,14 @@ export class HoneycombAPI {
         limit: query.limit || defaultLimit,
       };
 
+      // Cleanup: Remove undefined parameters to avoid API validation errors
+      Object.keys(queryWithLimit).forEach(key => {
+        const typedKey = key as keyof typeof queryWithLimit;
+        if (queryWithLimit[typedKey] === undefined) {
+          delete queryWithLimit[typedKey];
+        }
+      });
+
       const results = await this.queryAndWaitForResults(
         environment,
         datasetSlug,
@@ -261,6 +269,27 @@ export class HoneycombAPI {
         links: results.links,
       };
     } catch (error) {
+      // Provide more specific error messages for common API errors
+      if (error instanceof HoneycombError) {
+        if (error.statusCode === 422) {
+          // Unprocessable Entity - likely parameter validation issues
+          let errorMessage = "Query validation failed: ";
+          
+          // Check for common issues with granularity
+          if (params.granularity !== undefined) {
+            errorMessage += "The granularity parameter might be causing issues. Try: ";
+            errorMessage += "\n1. Ensure you're specifying a time window (time_range or start_time+end_time)";
+            errorMessage += "\n2. Make sure granularity value isn't too small for your time window";
+            errorMessage += "\n3. Consider removing granularity and other advanced parameters for a simpler query first";
+          } else {
+            errorMessage += "Try simplifying your query parameters";
+          }
+          
+          throw new Error(errorMessage);
+        }
+      }
+      
+      // Default error message
       throw new Error(
         `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
