@@ -75,18 +75,8 @@ export class HoneycombAPI {
     }
 
     // Parse the response as JSON and validate it before returning
-    try {
-      const data = await response.json();
-      return data as T;
-    } catch (error) {
-      console.error(`Error parsing JSON from ${path}:`, error);
-      
-      // For debugging, try to get the raw text
-      const text = await response.text();
-      console.log(`Raw response from ${path}:`, text.substring(0, 1000) + (text.length > 1000 ? '...' : ''));
-      
-      throw new Error(`Failed to parse JSON response from ${path}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    const data = await response.json();
+    return data as T;
   }
 
   // Dataset methods
@@ -385,10 +375,8 @@ export class HoneycombAPI {
       }
       
       // If we get here, the response doesn't match either expected format
-      console.warn("Unexpected boards response format:", typeof response, response);
       return [];
     } catch (error) {
-      console.error(`Error fetching boards: ${error instanceof Error ? error.message : String(error)}`);
       // Return empty array instead of throwing to prevent breaking the application
       return [];
     }
