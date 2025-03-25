@@ -1,5 +1,7 @@
 # Honeycomb MCP Server
 
+[![smithery badge](https://smithery.ai/badge/hny-mcp)](https://smithery.ai/server/hny-mcp)
+
 A [Model Context Protocol](https://modelcontextprotocol.io) server for interacting with Honeycomb observability data. This server enables LLMs like Claude to directly analyze and query your Honeycomb datasets across multiple environments.
 
 ## Honeycomb Enterprise Only
@@ -8,6 +10,15 @@ Currently, this is only available for Honeycomb Enterprise customers.
 
 ## Installation
 
+### Installing via Smithery
+
+To install Honeycomb MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/hny-mcp):
+
+```bash
+npx -y @smithery/cli install hny-mcp --client claude
+```
+
+### Manual Installation
 ```bash
 pnpm install
 pnpm run build
