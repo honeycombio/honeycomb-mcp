@@ -53,7 +53,7 @@ describe('datasets resource', () => {
         }
       ]);
       
-      const result = await handleDatasetResource(mockApi as any, mockUri, mockParams);
+      const result = await handleDatasetResource(mockApi as any, mockParams);
       
       // Verify result structure
       expect(result).toHaveProperty('contents');
@@ -85,7 +85,7 @@ describe('datasets resource', () => {
         { name: 'Dataset2', slug: 'dataset2', description: null }
       ]);
       
-      const result = await handleDatasetResource(mockApi as any, mockUri, paramsWithoutDataset);
+      const result = await handleDatasetResource(mockApi as any, paramsWithoutDataset);
       
       // Verify result structure
       expect(result).toHaveProperty('contents');
@@ -106,7 +106,7 @@ describe('datasets resource', () => {
       mockApi.getDataset.mockRejectedValue(new Error('Dataset not found'));
       
       // Expect the function to throw
-      await expect(handleDatasetResource(mockApi as any, mockUri, mockParams))
+      await expect(handleDatasetResource(mockApi as any, mockParams))
         .rejects.toThrow('Failed to read dataset');
     });
   });

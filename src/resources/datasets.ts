@@ -1,6 +1,7 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { HoneycombAPI } from "../api/client.js";
 import { Dataset } from "../types/api.js";
+import { Column } from "../types/column.js";
 
 /**
  * Interface for MCP resource items
@@ -77,87 +78,79 @@ interface DatasetWithColumns {
  * 
  * @param api - The Honeycomb API client
  * @param uri - The resource URI
- * @param params - The parsed parameters from the URI
+ * @param variables - The parsed variables from the URI template
  * @returns Dataset resource contents
  * @throws Error if the dataset cannot be retrieved
  */
 export async function handleDatasetResource(
   api: HoneycombAPI,
-  uri: URL,
-  { environment, dataset }: { environment: string; dataset: string }
+  variables: Record<string, string | string[]>
 ) {
-  try {
-    // Validate required parameters
-    if (!environment) {
-      throw new Error("Missing required parameter: environment");
+  // Extract environment and dataset from variables, handling potential array values
+  const environment = Array.isArray(variables.environment) 
+    ? variables.environment[0] 
+    : variables.environment;
+    
+  const datasetSlug = Array.isArray(variables.dataset) 
+    ? variables.dataset[0] 
+    : variables.dataset;
+  
+  if (!environment) {
+    throw new Error("Missing environment parameter");
+  }
+  
+  if (!datasetSlug) {
+    // Return all datasets for this environment
+    try {
+      const datasets = await api.listDatasets(environment);
+      
+      return {
+        contents: datasets.map(dataset => ({
+          uri: `honeycomb://${environment}/${dataset.slug}`,
+          text: JSON.stringify({
+            name: dataset.name,
+            description: dataset.description || '',
+            slug: dataset.slug,
+            created_at: dataset.created_at,
+            last_written_at: dataset.last_written_at,
+          }, null, 2),
+          mimeType: "application/json"
+        }))
+      };
+    } catch (error) {
+      throw new Error(`Failed to list datasets: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    if (dataset) {
-      // Get specific dataset with columns
-      try {
-        // Fetch dataset info and columns in parallel
-        const [datasetInfo, columns] = await Promise.all([
-          api.getDataset(environment, dataset),
-          api.getVisibleColumns(environment, dataset)
-        ]);
-
-        // Create a streamlined version of dataset info
-        const datasetWithColumns: DatasetWithColumns = {
-          name: datasetInfo.name,
-          description: datasetInfo.description || '',
-          slug: datasetInfo.slug,
-          created_at: datasetInfo.created_at,
-          last_written_at: datasetInfo.last_written_at,
-          columns: columns
-            .filter(c => !c.hidden) // Only show visible columns
-            .map((c) => ({
-              name: c.key_name,
-              type: c.type,
-              description: c.description || '',
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name)), // Sort by column name
-        };
-
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "application/json",
-              text: JSON.stringify(datasetWithColumns, null, 2),
-            },
-          ],
-        };
-      } catch (error) {
-        throw new Error(`Failed to retrieve dataset '${dataset}': ${error instanceof Error ? error.message : String(error)}`);
-      }
-    } else {
-      // List all datasets in the environment
-      try {
-        const datasets = await api.listDatasets(environment);
-        
-        if (datasets.length === 0) {
-          // Return empty contents instead of throwing
-          return { contents: [] };
-        }
-        
-        return {
-          contents: datasets.map((dataset: Dataset) => ({
-            uri: `honeycomb://${environment}/${dataset.slug}`,
-            text: JSON.stringify({
-              name: dataset.name,
-              slug: dataset.slug,
-              description: dataset.description || '',
-              created_at: dataset.created_at,
-              last_written_at: dataset.last_written_at,
-            }, null, 2),
-          })),
-        };
-      } catch (error) {
-        throw new Error(`Failed to list datasets in environment '${environment}': ${error instanceof Error ? error.message : String(error)}`);
-      }
+  } else {
+    // Return specific dataset with columns
+    try {
+      const dataset = await api.getDataset(environment, datasetSlug);
+      const columns = await api.getVisibleColumns(environment, datasetSlug);
+      
+      // Filter out hidden columns
+      const visibleColumns = columns.filter((column: Column) => !column.hidden);
+      
+      const datasetWithColumns: DatasetWithColumns = {
+        name: dataset.name,
+        description: dataset.description || '',
+        slug: dataset.slug,
+        columns: visibleColumns.map((column: Column) => ({
+          name: column.key_name,
+          type: column.type,
+          description: column.description || '',
+        })),
+        created_at: dataset.created_at,
+        last_written_at: dataset.last_written_at,
+      };
+      
+      return {
+        contents: [{
+          uri: `honeycomb://${environment}/${datasetSlug}`,
+          text: JSON.stringify(datasetWithColumns, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      throw new Error(`Failed to read dataset: ${error instanceof Error ? error.message : String(error)}`);
     }
-  } catch (error) {
-    // Wrap and re-throw any errors with context
-    throw new Error(`Failed to read dataset: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

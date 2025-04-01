@@ -1,6 +1,6 @@
 import { HoneycombAPI } from "../api/client.js";
 import { createDatasetsResource, handleDatasetResource } from "./datasets.js";
-import { MCPServer } from "../types/mcp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /**
  * Register all resources with the MCP server
@@ -8,13 +8,12 @@ import { MCPServer } from "../types/mcp.js";
  * @param server - The MCP server instance
  * @param api - The Honeycomb API client
  */
-export function registerResources(server: MCPServer, api: HoneycombAPI) {
+export function registerResources(server: McpServer, api: HoneycombAPI) {
   // Register datasets resource
-  // Use type assertion to make TypeScript happy with the MCP SDK
-  (server as any).resource(
+  server.resource(
     "datasets",
     createDatasetsResource(api),
-    (uri: URL, params: { environment: string; dataset: string }) => 
-      handleDatasetResource(api, uri, params)
+    (_uri: URL, variables: Record<string, string | string[]>) => 
+      handleDatasetResource(api, variables as Record<string, string>)
   );
 }

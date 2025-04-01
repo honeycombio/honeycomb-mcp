@@ -5,7 +5,6 @@ import { HoneycombAPI } from "./api/client.js";
 import process from "node:process";
 import { registerResources } from "./resources/index.js";
 import { registerTools } from "./tools/index.js";
-import { MCPServer } from "./types/mcp.js";
 
 /**
  * Main function to run the Honeycomb MCP server
@@ -27,8 +26,8 @@ async function main() {
 
   // Register resources and tools
   console.error("Registering resources and tools...");
-  registerResources(server as unknown as MCPServer, api);
-  registerTools(server as unknown as MCPServer, api);
+  registerResources(server, api);
+  registerTools(server, api);
 
   // Wait for tool registration to complete
   await new Promise(resolve => setTimeout(resolve, 500));
