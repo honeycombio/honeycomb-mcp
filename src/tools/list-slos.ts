@@ -23,7 +23,7 @@ interface SimplifiedSLO {
 export function createListSLOsTool(api: HoneycombAPI) {
   return {
     name: "list_slos",
-    description: "Lists available SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed.",
+    description: "Lists available SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed. NOTE: __all__ is NOT supported as a dataset name -- it is not possible to list all triggers in an environment.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset to fetch SLOs from"),

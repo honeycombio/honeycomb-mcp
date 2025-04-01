@@ -21,7 +21,7 @@ interface SimplifiedColumn {
 export function createGetColumnsTool(api: HoneycombAPI) {
   return {
     name: "get_columns",
-    description: "Retrieves a list of all columns available in the specified environment, including their names, types, descriptions, and hidden status.",
+    description: "Retrieves a list of all columns available in the specified dataset, including their names, types, descriptions, and hidden status. Note: __all__ is NOT supported as a dataset name -- it is not possible to list all columns in an environment.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset to fetch columns from"),

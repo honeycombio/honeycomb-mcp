@@ -12,7 +12,7 @@ import { ListMarkersSchema } from "../types/schema.js";
 export function createListMarkersTool(api: HoneycombAPI) {
   return {
     name: "list_markers",
-    description: "Lists available markers (deployment events) for a specific environment. This tool returns a list of all markers available in the specified environment, including their IDs, messages, types, URLs, creation times, start times, and end times.",
+    description: "Lists available markers (deployment events) for a specific dataset or environment. This tool returns a list of all markers available in the specified dataset or environment, including their IDs, messages, types, URLs, creation times, start times, and end times. NOTE: use __all__ as the dataset name to list all markers in the environment.",
     schema: ListMarkersSchema.shape,
     /**
      * Handler for the list_markers tool
