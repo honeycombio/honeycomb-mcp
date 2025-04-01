@@ -7,7 +7,7 @@ import {
 import { QueryToolSchema, ColumnAnalysisSchema } from "../types/schema.js";
 import { HoneycombError } from "../utils/errors.js";
 import { Column } from "../types/column.js";
-import { Dataset } from "../types/api.js";
+import { Dataset, AuthResponse } from "../types/api.js";
 import { SLO, SLODetailedResponse } from "../types/slo.js";
 import { TriggerResponse } from "../types/trigger.js";
 import { QueryOptions } from "../types/api.js";
@@ -19,6 +19,8 @@ import { Config } from "../config.js";
 export class HoneycombAPI {
   private environments: Map<string, { apiKey: string; apiEndpoint?: string }>;
   private defaultApiEndpoint = "https://api.honeycomb.io";
+  // Cache for auth responses to avoid repeated API calls
+  private authCache: Map<string, AuthResponse> = new Map();
 
   constructor(config: Config) {
     this.environments = new Map(
@@ -31,6 +33,44 @@ export class HoneycombAPI {
 
   getEnvironments(): string[] {
     return Array.from(this.environments.keys());
+  }
+  
+  /**
+   * Get authentication information for an environment
+   * 
+   * @param environment - The environment name
+   * @returns Auth response with team and environment details
+   */
+  async getAuthInfo(environment: string): Promise<AuthResponse> {
+    // Check cache first
+    if (this.authCache.has(environment)) {
+      return this.authCache.get(environment)!;
+    }
+    
+    try {
+      const authInfo = await this.request<AuthResponse>(environment, "/1/auth");
+      // Cache the result
+      this.authCache.set(environment, authInfo);
+      return authInfo;
+    } catch (error) {
+      throw new Error(`Failed to get auth info: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  
+  /**
+   * Get the team slug for an environment
+   * 
+   * @param environment - The environment name
+   * @returns The team slug
+   */
+  async getTeamSlug(environment: string): Promise<string> {
+    const authInfo = await this.getAuthInfo(environment);
+    
+    if (!authInfo.team?.slug) {
+      throw new Error(`No team slug found for environment: ${environment}`);
+    }
+    
+    return authInfo.team.slug;
   }
 
   private getApiKey(environment: string): string {

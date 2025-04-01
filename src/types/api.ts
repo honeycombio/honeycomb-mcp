@@ -61,6 +61,20 @@ export interface PromptResponse {
   }[];
 }
 
+export interface AuthResponse {
+  id: string;
+  type: string;
+  api_key_access: Record<string, boolean>;
+  environment?: {
+    name: string;
+    slug: string;
+  };
+  team?: {
+    name: string;
+    slug: string;
+  };
+}
+
 export interface QueryOptions {
   includeSeries?: boolean;
   limit?: number;

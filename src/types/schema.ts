@@ -327,3 +327,15 @@ export const GetRecipientSchema = z.object({
   environment: z.string().describe("The Honeycomb environment"),
   recipientId: z.string().describe("The ID of the recipient to retrieve"),
 });
+
+/**
+ * Schema for generating a trace deep link
+ */
+export const TraceDeepLinkSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  dataset: z.string().describe("The dataset containing the trace"),
+  traceId: z.string().describe("The unique trace ID"),
+  spanId: z.string().optional().describe("The unique span ID to jump to within the trace"),
+  traceStartTs: z.number().optional().describe("Start timestamp in Unix epoch seconds"),
+  traceEndTs: z.number().optional().describe("End timestamp in Unix epoch seconds"),
+});
