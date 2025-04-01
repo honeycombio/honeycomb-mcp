@@ -12,7 +12,7 @@ import { TraceDeepLinkSchema } from "../types/schema.js";
 export function createTraceDeepLinkTool(api: HoneycombAPI) {
   return {
     name: "get_trace_link",
-    description: "Generates a direct deep link to a specific trace in the Honeycomb UI. This tool creates a URL that opens a specific distributed trace, optionally positioning to a particular span and time range.",
+    description: "Generates a direct deep link to a specific trace in the Honeycomb UI. This tool creates a URL that opens a specific distributed trace, optionally positioning to a particular span and time range. If no time range is specified, the trace must have been generated within two hours from the current time. If only the start time is provided, the end time is assumed to be 10 minutes from the start time.",
     schema: TraceDeepLinkSchema.shape,
     /**
      * Handler for the get_trace_link tool
