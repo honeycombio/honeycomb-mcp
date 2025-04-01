@@ -14,7 +14,7 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
   if (params.orders) {
     for (const order of params.orders) {
       if (order.column && params.breakdowns && !params.breakdowns.includes(order.column) && 
-          !params.calculations.some((calc: { op: string; column?: string }) => calc.column === order.column)) {
+          !params.calculations.some((calc) => calc.column === order.column)) {
         throw new Error(`Order column '${order.column}' must be in breakdowns or calculations.`);
       }
       
@@ -31,7 +31,7 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
   // Validate having clauses
   if (params.having) {
     for (const having of params.having) {
-      const matchingCalculation = params.calculations.some((calc: { op: string; column?: string }) => {
+      const matchingCalculation = params.calculations.some((calc) => {
         if ((calc.op === "COUNT" || calc.op === "CONCURRENCY") && 
             having.calculate_op === calc.op) {
           return true;
@@ -49,7 +49,7 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
   // Validate calculations
   if (params.calculations) {
     // Check if any calculation requires a column but doesn't have one
-    params.calculations.forEach((calc: { op: string; column?: string }) => {
+    params.calculations.forEach((calc) => {
       if (
         ["SUM", "AVG", "COUNT_DISTINCT", "MAX", "MIN", "P001", "P01", "P05", "P10", "P20", "P25", "P50", "P75", "P80", "P90", "P95", "P99", "P999", "RATE_AVG", "RATE_SUM", "RATE_MAX"].includes(calc.op) &&
         !calc.column
@@ -65,7 +65,7 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
     params.orders.forEach((order) => {
       if (order.op && order.column) {
         const matchingCalc = params.calculations?.find(
-          (calc: { op: string; column?: string }) => calc.op === order.op && calc.column === order.column
+          (calc) => calc.op === order.op && calc.column === order.column
         );
         if (!matchingCalc) {
           throw new Error(`Order references non-existent calculation: ${order.op} on ${order.column}`);

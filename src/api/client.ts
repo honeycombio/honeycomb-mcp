@@ -3,6 +3,10 @@ import {
   QueryResult,
   AnalysisQuery,
   QueryCalculation,
+  QueryFilter,
+  QueryOrder,
+  QueryHaving,
+  QueryAnnotation,
 } from "../types/query.js";
 import { QueryToolSchema, ColumnAnalysisSchema } from "../types/schema.js";
 import { HoneycombError } from "../utils/errors.js";
@@ -83,15 +87,42 @@ export class HoneycombAPI {
     });
 
     if (!response.ok) {
+      let errorDetail = response.statusText;
+      
+      try {
+        // Try to parse error response for more details
+        const errorBody = await response.text();
+        if (errorBody) {
+          try {
+            const errorJson = JSON.parse(errorBody);
+            errorDetail = errorJson.error || errorJson.message || errorBody;
+          } catch {
+            // If not JSON, use the raw text
+            errorDetail = errorBody;
+          }
+        }
+      } catch (parseError) {
+        // If we can't parse the error, use the status text
+        // Error parsing API error response
+      }
+      
       throw new HoneycombError(
         response.status,
-        `Honeycomb API error: ${response.statusText}`,
+        `Honeycomb API error: ${errorDetail}`,
       );
     }
 
     // Parse the response as JSON and validate it before returning
-    const data = await response.json();
-    return data as T;
+    try {
+      const data = await response.json();
+      return data as T;
+    } catch (parseError) {
+      // Error parsing API response
+      throw new HoneycombError(
+        500,
+        `Failed to parse API response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+      );
+    }
   }
 
   // Dataset methods
@@ -117,6 +148,47 @@ export class HoneycombAPI {
         body: JSON.stringify(query),
       },
     );
+  }
+  
+  async getQuery(
+    environment: string,
+    datasetSlug: string,
+    queryId: string,
+  ): Promise<{ id: string; query: AnalysisQuery }> {
+    return this.request<{ id: string; query: AnalysisQuery }>(
+      environment,
+      `/1/queries/${datasetSlug}/${queryId}`,
+    );
+  }
+  
+  /**
+   * Get the annotation for a query if it exists
+   * 
+   * @param environment - The environment name
+   * @param datasetSlug - The dataset slug
+   * @param queryId - The ID of the query
+   * @returns Query annotation if found
+   */
+  async getQueryAnnotation(
+    environment: string,
+    datasetSlug: string, 
+    queryId: string
+  ): Promise<QueryAnnotation | null> {
+    try {
+      // First we need to list all annotations and filter for the ones matching our query ID
+      const annotations = await this.request<QueryAnnotation[]>(
+        environment,
+        `/1/query_annotations/${datasetSlug}`,
+      );
+      
+      // Find the annotation for this query
+      const annotation = annotations.find(a => a.query_id === queryId);
+      return annotation || null;
+    } catch (error) {
+      // If we encounter an error fetching annotations, just return null
+      // This way, not having annotations won't break the application
+      return null;
+    }
   }
 
   async createQueryResult(
@@ -235,13 +307,13 @@ export class HoneycombAPI {
   ) {
     // Build the query with enhanced validation based on specs
     const query: AnalysisQuery = {
-      calculations: params.calculations,
+      calculations: params.calculations as unknown as QueryCalculation[],
       breakdowns: params.breakdowns || [],
-      filters: params.filters,
+      filters: params.filters as unknown as QueryFilter[],
       filter_combination: params.filter_combination,
-      orders: params.orders,
+      orders: params.orders as unknown as QueryOrder[],
       limit: params.limit,
-      having: params.having,
+      having: params.having as unknown as QueryHaving[],
       
       // Time-related parameters
       // The prompt.txt spec notes that time_range is relative and can be 

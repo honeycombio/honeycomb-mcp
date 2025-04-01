@@ -148,6 +148,20 @@ export const QueryToolSchema = z.object({
   having: z.array(HavingSchema).optional(),
 });
 
+export const RunSavedQuerySchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  dataset: z.string().describe("The dataset containing the query"),
+  queryId: z.string().describe("The ID of the saved query to run"),
+  includeSeries: z.boolean().optional().describe("Whether to include series data in the results").default(false),
+  maxAttempts: z.number().optional().describe("Maximum number of polling attempts").default(10)
+});
+
+export const GetQuerySchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  dataset: z.string().describe("The dataset containing the query"),
+  queryId: z.string().describe("The ID of the query to retrieve"),
+});
+
 export const ColumnAnalysisSchema = z.object({
   environment: z.string(),
   dataset: z.string(),
@@ -326,4 +340,16 @@ export const ListRecipientsSchema = z.object({
 export const GetRecipientSchema = z.object({
   environment: z.string().describe("The Honeycomb environment"),
   recipientId: z.string().describe("The ID of the recipient to retrieve"),
+});
+
+/**
+ * Schema for generating a trace deep link
+ */
+export const TraceDeepLinkSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  dataset: z.string().describe("The dataset containing the trace"),
+  traceId: z.string().describe("The unique trace ID"),
+  spanId: z.string().optional().describe("The unique span ID to jump to within the trace"),
+  traceStartTs: z.number().optional().describe("Start timestamp in Unix epoch seconds"),
+  traceEndTs: z.number().optional().describe("End timestamp in Unix epoch seconds"),
 });

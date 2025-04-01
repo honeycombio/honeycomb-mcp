@@ -45,7 +45,7 @@ export function createDatasetsResource(api: HoneycombAPI) {
             });
           });
         } catch (error) {
-          console.error(`Error fetching datasets for environment ${env}:`, error);
+          // Error fetching datasets
         }
       }
       

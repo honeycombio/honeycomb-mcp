@@ -2,6 +2,8 @@ import { HoneycombAPI } from "../api/client.js";
 import { createListDatasetsTool } from "./list-datasets.js";
 import { createGetColumnsTool } from "./get-columns.js";
 import { createRunQueryTool } from "./run-query.js";
+import { createGetQueryTool } from "./get-query.js";
+import { createRunSavedQueryTool } from "./run-saved-query.js";
 import { createAnalyzeColumnTool } from "./analyze-column.js";
 import { createListBoardsTool } from "./list-boards.js";
 import { createGetBoardTool } from "./get-board.js";
@@ -13,6 +15,7 @@ import { createListTriggersTool } from "./list-triggers.js";
 import { createGetTriggerTool } from "./get-trigger.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { handleToolError } from "../utils/tool-error.js";
 
 /**
  * Register all tools with the MCP server
@@ -28,6 +31,8 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
 
     // Query tools
     createRunQueryTool(api),
+    createGetQueryTool(api),
+    createRunSavedQueryTool(api),
     createAnalyzeColumnTool(api),
 
     // Board tools
@@ -89,15 +94,8 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
           } as any;
         } catch (error) {
           // Format errors to match the SDK's expected format
-          return {
-            content: [
-              {
-                type: "text",
-                text: error instanceof Error ? error.message : String(error),
-              },
-            ],
-            isError: true,
-          } as any;
+          // Use handleToolError directly since it's no longer async
+          return handleToolError(error, tool.name);
         }
       }
     );

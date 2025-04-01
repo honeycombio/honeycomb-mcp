@@ -46,7 +46,7 @@ export function loadConfig(): Config {
       );
     }
     if (error instanceof SyntaxError) {
-      console.error(`Failed to parse config file ${configPath}`);
+      // Failed to parse config file
     }
     throw error;
   }

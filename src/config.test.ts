@@ -39,7 +39,7 @@ describe("Config", () => {
     });
 
     it("throws on empty environments array", () => {
-      const config = { environments: [] };
+      const config = { environments: [] as Array<{name: string, apiKey: string, apiEndpoint?: string}> };
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(config));
       expect(() => loadConfig()).toThrow(/At least one environment/);

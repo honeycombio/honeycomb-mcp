@@ -36,11 +36,32 @@ export function createGetBoardTool(api: HoneycombAPI) {
         // Fetch board from the API
         const board = await api.getBoard(environment, boardId);
         
+        // Extract a default dataset from the board if available
+        // We'll use this as a fallback for queries without a specified dataset
+        const defaultDataset = board.queries?.find(q => q.dataset)?.dataset || '__all__';
+        
+        // Enhance the board response by ensuring each query has a dataset
+        // This is important for enabling users to fetch queries by ID
+        const enhancedBoard = {
+          ...board,
+          queries: board.queries?.map(query => {
+            // If the query has no dataset, use the default dataset from the board
+            return {
+              ...query,
+              dataset: query.dataset || defaultDataset,
+              // Add a note if we have a query_id
+              note: query.query_id ? 
+                'Use run_saved_query tool with environment, dataset, and queryId to run this query directly, or get_query to retrieve its definition' 
+                : undefined
+            };
+          })
+        };
+        
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(board, null, 2),
+              text: JSON.stringify(enhancedBoard, null, 2),
             },
           ],
           metadata: {

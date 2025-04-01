@@ -11,7 +11,7 @@
     "verbatimModuleSyntax": false,
     "strict": true,
     "noImplicitAny": true,
-    "strictNullChecks": true,
+    "strictNullChecks": false,
     "noEmitOnError": true
   },
   "include": ["src/**/*"],

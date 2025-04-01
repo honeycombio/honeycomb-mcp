@@ -3,14 +3,15 @@ import { HoneycombError } from "./errors.js";
 /**
  * Handles errors from tool execution and returns a formatted error response
  */
-export async function handleToolError(
+export function handleToolError(
   error: unknown,
   toolName: string,
   options: { suppressConsole?: boolean } = {}
-): Promise<{
+): {
   content: { type: "text"; text: string }[];
-  error: { message: string; };
-}> {
+  isError: true;
+  error?: { message: string };
+} {
   let errorMessage = "Unknown error occurred";
 
   if (error instanceof HoneycombError) {
@@ -19,10 +20,7 @@ export async function handleToolError(
     errorMessage = error.message;
   }
 
-  // Log the error to stderr for debugging, unless suppressed
-  if (!options.suppressConsole) {
-    console.error(`Tool '${toolName}' failed:`, error);
-  }
+  // Skip logging to prevent MCP protocol issues
 
   return {
     content: [
@@ -36,6 +34,7 @@ export async function handleToolError(
           `- Your query parameters are valid\n`,
       },
     ],
+    isError: true,
     error: {
       message: errorMessage
     }

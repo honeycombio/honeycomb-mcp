@@ -71,6 +71,18 @@ export interface QueryResult {
   id: string;
 }
 
+/**
+ * Interface for query annotations
+ */
+export interface QueryAnnotation {
+  id: string;
+  name: string;
+  description?: string;
+  query_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface QueryResultValue {
   [key: string]: string | number | boolean | null;
 }
