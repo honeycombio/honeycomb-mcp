@@ -19,7 +19,7 @@ interface SimplifiedSLODetails {
 }
 
 /**
- * Tool to get a specific SLO (Service Level Objective) by ID with detailed information
+ * Tool to get a specific SLO (Service Level Objective) by ID with detailed information. This tool returns a detailed object containing the SLO's ID, name, description, time period, target per million, compliance, budget remaining, SLI alias, and timestamps.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -27,6 +27,7 @@ interface SimplifiedSLODetails {
 export function createGetSLOTool(api: HoneycombAPI) {
   return {
     name: "get_slo",
+    description: "Retrieves a specific SLO (Service Level Objective) by ID with detailed information. This tool returns a detailed object containing the SLO's ID, name, description, time period, target per million, compliance, budget remaining, SLI alias, and timestamps.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset containing the SLO"),

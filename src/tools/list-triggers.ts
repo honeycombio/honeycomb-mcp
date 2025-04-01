@@ -2,7 +2,6 @@ import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
 import { handleToolError } from "../utils/tool-error.js";
 import { DatasetArgumentsSchema } from "../types/schema.js";
-import { TriggerThreshold } from "../types/trigger.js";
 
 /**
  * Interface for simplified trigger data returned by the list_triggers tool
@@ -22,7 +21,7 @@ interface SimplifiedTrigger {
 }
 
 /**
- * Tool to list triggers (alerts) for a specific dataset
+ * Tool to list triggers (alerts) for a specific dataset. This tool returns a list of all triggers available in the specified environment, including their names, descriptions, thresholds, and other metadata.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -30,6 +29,7 @@ interface SimplifiedTrigger {
 export function createListTriggersTool(api: HoneycombAPI) {
   return {
     name: "list_triggers",
+    description: "Lists available triggers (alerts) for a specific dataset. This tool returns a list of all triggers available in the specified environment, including their names, descriptions, thresholds, and other metadata.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset to fetch triggers from"),

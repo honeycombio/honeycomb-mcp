@@ -32,7 +32,7 @@ interface SimplifiedTriggerDetails {
 }
 
 /**
- * Tool to get a specific trigger (alert) by ID with detailed information
+ * Tool to get a specific trigger (alert) by ID with detailed information. This tool returns a detailed object containing the trigger's ID, name, description, threshold, frequency, alert type, triggered status, disabled status, recipients, evaluation schedule type, and timestamps.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -40,6 +40,7 @@ interface SimplifiedTriggerDetails {
 export function createGetTriggerTool(api: HoneycombAPI) {
   return {
     name: "get_trigger",
+    description: "Retrieves a specific trigger (alert) by ID with detailed information. This tool returns a detailed object containing the trigger's ID, name, description, threshold, frequency, alert type, triggered status, disabled status, recipients, evaluation schedule type, and timestamps.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset containing the trigger"),

@@ -4,7 +4,7 @@ import { handleToolError } from "../utils/tool-error.js";
 import { ListRecipientsSchema } from "../types/schema.js";
 
 /**
- * Tool to list notification recipients in a Honeycomb environment
+ * Tool to list notification recipients in a Honeycomb environment. This tool returns a list of all recipients available in the specified environment, including their names, types, targets, and metadata.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -12,6 +12,7 @@ import { ListRecipientsSchema } from "../types/schema.js";
 export function createListRecipientsTool(api: HoneycombAPI) {
   return {
     name: "list_recipients",
+    description: "Lists available recipients for notifications in a specific environment. This tool returns a list of all recipients available in the specified environment, including their names, types, targets, and metadata.",
     schema: ListRecipientsSchema.shape,
     /**
      * Handler for the list_recipients tool

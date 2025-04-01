@@ -15,7 +15,7 @@ interface SimplifiedSLO {
 }
 
 /**
- * Tool to list SLOs (Service Level Objectives) for a specific dataset
+ * Tool to list SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -23,6 +23,7 @@ interface SimplifiedSLO {
 export function createListSLOsTool(api: HoneycombAPI) {
   return {
     name: "list_slos",
+    description: "Lists available SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset to fetch SLOs from"),

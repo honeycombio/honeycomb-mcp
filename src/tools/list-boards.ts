@@ -4,7 +4,7 @@ import { handleToolError } from "../utils/tool-error.js";
 import { ListBoardsSchema } from "../types/schema.js";
 
 /**
- * Tool to list boards (dashboards) in a Honeycomb environment
+ * Tool to list boards (dashboards) in a Honeycomb environment. This tool returns a list of all boards available in the specified environment, including their IDs, names, descriptions, creation times, and last update times.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -12,6 +12,7 @@ import { ListBoardsSchema } from "../types/schema.js";
 export function createListBoardsTool(api: HoneycombAPI) {
   return {
     name: "list_boards",
+    description: "Lists available boards (dashboards) for a specific environment. This tool returns a list of all boards available in the specified environment, including their IDs, names, descriptions, creation times, and last update times.",
     schema: ListBoardsSchema.shape,
     /**
      * Handler for the list_boards tool

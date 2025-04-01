@@ -4,7 +4,7 @@ import { handleToolError } from "../utils/tool-error.js";
 import { GetBoardSchema } from "../types/schema.js";
 
 /**
- * Tool to get a specific board (dashboard) from a Honeycomb environment
+ * Tool to get a specific board (dashboard) from a Honeycomb environment. This tool returns a detailed object containing the board's ID, name, description, creation time, and last update time.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -12,6 +12,7 @@ import { GetBoardSchema } from "../types/schema.js";
 export function createGetBoardTool(api: HoneycombAPI) {
   return {
     name: "get_board",
+    description: "Retrieves a specific board (dashboard) from a Honeycomb environment. This tool returns a detailed object containing the board's ID, name, description, creation time, and last update time.",
     schema: GetBoardSchema.shape,
     /**
      * Handler for the get_board tool

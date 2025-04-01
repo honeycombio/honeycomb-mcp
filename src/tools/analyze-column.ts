@@ -31,6 +31,7 @@ function getCardinalityClassification(uniqueCount: number): CardinalityClassific
 export function createAnalyzeColumnTool(api: HoneycombAPI) {
   return {
     name: "analyze_column",
+    description: "Analyzes a specific column in a dataset by running statistical queries and returning computed metrics. This tool allows users to get statistical information about a specific column, including value distribution, top values, and numeric statistics (for numeric columns).",
     schema: ColumnAnalysisSchema.shape,
     /**
      * Handles the analyze_column tool request

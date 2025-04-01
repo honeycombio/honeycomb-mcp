@@ -13,7 +13,7 @@ interface SimplifiedColumn {
 }
 
 /**
- * Tool to get columns for a specific dataset
+ * Tool to get columns for a specific dataset. This tool returns a list of all columns available in the specified environment, including their names, types, descriptions, and hidden status.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
@@ -21,6 +21,7 @@ interface SimplifiedColumn {
 export function createGetColumnsTool(api: HoneycombAPI) {
   return {
     name: "get_columns",
+    description: "Retrieves a list of all columns available in the specified environment, including their names, types, descriptions, and hidden status.",
     schema: {
       environment: z.string().describe("The Honeycomb environment"),
       dataset: z.string().describe("The dataset to fetch columns from"),

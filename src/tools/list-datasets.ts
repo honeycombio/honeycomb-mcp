@@ -21,6 +21,7 @@ const ListDatasetsSchema = z.object({
 export function createListDatasetsTool(api: HoneycombAPI) {
   return {
     name: "list_datasets",
+    description: "Lists available datasets for the active environment. This tool returns a list of all datasets available in the specified environment, including their names, slugs, and descriptions.",
     schema: { environment: z.string() },
     /**
      * Handles the list_datasets tool request

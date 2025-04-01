@@ -191,6 +191,7 @@ async function executeQuery(
 export function createRunQueryTool(api: HoneycombAPI) {
   return {
     name: "run_query",
+    description: "Executes a Honeycomb query against a dataset, performing validation and returning raw results along with statistical summaries. This tool handles construction, validation, execution, and summarization of Honeycomb queries.",
     schema: QueryToolSchema.shape,
     /**
      * Handles the run_query tool request

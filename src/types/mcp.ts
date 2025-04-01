@@ -59,12 +59,14 @@ export interface MCPServer {
    * Register a tool with the MCP server
    * 
    * @param name - The name of the tool
+   * @param description - The description of the tool
    * @param schema - The schema definition for the tool
    * @param handler - The tool handler function
    */
   tool(
-    name: string, 
-    schema: ToolSchemaDefinition, 
+    name: string,
+    description: string,
+    schema: ToolSchemaDefinition,
     handler: ToolHandlerFunction
   ): void;
 }
@@ -80,6 +82,7 @@ export type TypedToolHandlerFunction<T extends Record<string, any>> =
  */
 export interface MCPTool {
   name: string;
+  description: string;
   schema: ToolSchemaDefinition;
   handler: ToolHandlerFunction;
 }
@@ -89,6 +92,7 @@ export interface MCPTool {
  */
 export interface TypedMCPTool<T extends Record<string, any>> {
   name: string;
+  description: string;
   schema: ToolSchemaDefinition;
   handler: TypedToolHandlerFunction<T>;
 }

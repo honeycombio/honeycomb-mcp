@@ -13,7 +13,7 @@ interface ResourceItem {
 }
 
 /**
- * Creates and returns the datasets resource template for interacting with Honeycomb datasets
+ * Creates and returns the datasets resource template for interacting with Honeycomb datasets. This resource template allows users to list all datasets across all environments and retrieve specific datasets with their columns.
  * 
  * @param api - The Honeycomb API client instance
  * @returns A ResourceTemplate for datasets
@@ -70,7 +70,7 @@ interface DatasetWithColumns {
 }
 
 /**
- * Handles requests for dataset resources
+ * Handles requests for dataset resources. This resource template allows users to list all datasets across all environments and retrieve specific datasets with their columns.
  * 
  * This function retrieves either a specific dataset with its columns or
  * a list of all datasets in an environment.
@@ -82,8 +82,8 @@ interface DatasetWithColumns {
  * @throws Error if the dataset cannot be retrieved
  */
 export async function handleDatasetResource(
-  api: HoneycombAPI, 
-  uri: URL, 
+  api: HoneycombAPI,
+  uri: URL,
   { environment, dataset }: { environment: string; dataset: string }
 ) {
   try {
