@@ -201,12 +201,12 @@ export function createRunQueryTool(api: HoneycombAPI) {
      */
     handler: async (params: z.infer<typeof QueryToolSchema>) => {
       try {
-        // Validate query parameters before execution
+        // Validate parameters
         validateQueryParameters(params);
         
-        // Check for heatmap calculations to determine if series data should be included
+        // Check if any calculations use HEATMAP
         const hasHeatmap = params.calculations.some(calc => calc.op === "HEATMAP");
-
+        
         // Execute the query with retry logic for transient API issues
         const maxRetries = 3;
         let lastError: unknown = null;
@@ -229,8 +229,11 @@ export function createRunQueryTool(api: HoneycombAPI) {
         // If we get here, all attempts failed
         throw lastError || new Error("All query attempts failed");
       } catch (error) {
-        return handleToolError(error, "run_query");
+        return handleToolError(error, "run_query", {
+          environment: params.environment,
+          dataset: params.dataset
+        });
       }
-    }
+    },
   };
 }

@@ -15,6 +15,7 @@ import { Board, BoardsResponse } from "../types/board.js";
 import { Marker, MarkersResponse } from "../types/marker.js";
 import { Recipient, RecipientsResponse } from "../types/recipient.js";
 import { Config } from "../config.js";
+import { QueryError } from "../utils/errors.js";
 
 export class HoneycombAPI {
   private environments: Map<string, { apiKey: string; apiEndpoint?: string }>;
@@ -48,7 +49,7 @@ export class HoneycombAPI {
     }
     
     try {
-      const authInfo = await this.request<AuthResponse>(environment, "/1/auth");
+      const authInfo = await this.requestWithRetry<AuthResponse>(environment, "/1/auth");
       // Cache the result
       this.authCache.set(environment, authInfo);
       return authInfo;
@@ -93,6 +94,9 @@ export class HoneycombAPI {
     return env.apiEndpoint || this.defaultApiEndpoint;
   }
 
+  /**
+   * Makes a raw request to the Honeycomb API
+   */
   private async request<T>(
     environment: string,
     path: string,
@@ -122,10 +126,44 @@ export class HoneycombAPI {
       },
     });
 
+    // Parse rate limit headers if present
+    const rateLimit = response.headers.get('RateLimit');
+    const rateLimitPolicy = response.headers.get('RateLimitPolicy');
+    const retryAfter = response.headers.get('Retry-After');
+
+    if (response.status === 429) {
+      let errorMessage = "Rate limit exceeded";
+      if (retryAfter) {
+        errorMessage += `. Please try again after ${retryAfter}`;
+      }
+      if (rateLimit) {
+        errorMessage += `. ${rateLimit}`;
+      }
+      throw new HoneycombError(429, errorMessage);
+    }
+
     if (!response.ok) {
+      // Try to get the error message from the response body
+      let errorMessage = response.statusText;
+      try {
+        const errorBody = await response.json() as { error?: string } | string;
+        if (typeof errorBody === 'object' && errorBody.error) {
+          errorMessage = errorBody.error;
+        } else if (typeof errorBody === 'string') {
+          errorMessage = errorBody;
+        }
+      } catch (e) {
+        // If we can't parse the error body, just use the status text
+      }
+
+      // Include rate limit info in error message if available
+      if (rateLimit) {
+        errorMessage += ` (Rate limit: ${rateLimit})`;
+      }
+
       throw new HoneycombError(
         response.status,
-        `Honeycomb API error: ${response.statusText}`,
+        `Honeycomb API error: ${errorMessage}`,
       );
     }
 
@@ -134,13 +172,50 @@ export class HoneycombAPI {
     return data as T;
   }
 
+  /**
+   * Makes a request to the Honeycomb API with automatic retries for rate limits
+   */
+  private async requestWithRetry<T>(
+    environment: string,
+    path: string,
+    options: RequestInit & { 
+      params?: Record<string, any>;
+      maxRetries?: number;
+    } = {},
+  ): Promise<T> {
+    const maxRetries = options.maxRetries ?? 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await this.request<T>(environment, path, options);
+      } catch (error) {
+        lastError = error as Error;
+        
+        // Only retry on rate limit errors
+        if (error instanceof HoneycombError && error.statusCode === 429) {
+          const retryDelay = Math.pow(2, attempt) * 1000; // Exponential backoff
+          console.warn(`Rate limited, retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          continue;
+        }
+        
+        // For other errors, throw immediately
+        throw error;
+      }
+    }
+
+    // If we get here, we've exhausted our retries
+    throw lastError || new Error('Maximum retries exceeded');
+  }
+
   // Dataset methods
   async getDataset(environment: string, datasetSlug: string): Promise<Dataset> {
-    return this.request(environment, `/1/datasets/${datasetSlug}`);
+    return this.requestWithRetry(environment, `/1/datasets/${datasetSlug}`);
   }
 
   async listDatasets(environment: string): Promise<Dataset[]> {
-    return this.request(environment, "/1/datasets");
+    return this.requestWithRetry(environment, "/1/datasets");
   }
 
   // Query methods
@@ -149,7 +224,7 @@ export class HoneycombAPI {
     datasetSlug: string,
     query: AnalysisQuery,
   ): Promise<{ id: string }> {
-    return this.request<{ id: string }>(
+    return this.requestWithRetry<{ id: string }>(
       environment,
       `/1/queries/${datasetSlug}`,
       {
@@ -164,7 +239,7 @@ export class HoneycombAPI {
     datasetSlug: string,
     queryId: string,
   ): Promise<{ id: string }> {
-    return this.request<{ id: string }>(
+    return this.requestWithRetry<{ id: string }>(
       environment,
       `/1/query_results/${datasetSlug}`,
       {
@@ -180,7 +255,7 @@ export class HoneycombAPI {
     queryResultId: string,
     includeSeries: boolean = false,
   ): Promise<QueryResult> {
-    const response = await this.request<QueryResult>(
+    const response = await this.requestWithRetry<QueryResult>(
       environment,
       `/1/query_results/${datasetSlug}/${queryResultId}`,
       {
@@ -246,7 +321,7 @@ export class HoneycombAPI {
     environment: string,
     datasetSlug: string,
   ): Promise<Column[]> {
-    return this.request(environment, `/1/columns/${datasetSlug}`);
+    return this.requestWithRetry(environment, `/1/columns/${datasetSlug}`);
   }
 
   async getColumnByName(
@@ -254,7 +329,7 @@ export class HoneycombAPI {
     datasetSlug: string,
     keyName: string,
   ): Promise<Column> {
-    return this.request(
+    return this.requestWithRetry(
       environment,
       `/1/columns/${datasetSlug}?key_name=${encodeURIComponent(keyName)}`,
     );
@@ -273,31 +348,11 @@ export class HoneycombAPI {
     datasetSlug: string,
     params: z.infer<typeof QueryToolSchema>,
   ) {
-    // Build the query with enhanced validation based on specs
-    const query: AnalysisQuery = {
-      calculations: params.calculations,
-      breakdowns: params.breakdowns || [],
-      filters: params.filters,
-      filter_combination: params.filter_combination,
-      orders: params.orders,
-      limit: params.limit,
-      having: params.having,
-      
-      // Time-related parameters
-      // The prompt.txt spec notes that time_range is relative and can be 
-      // combined with either start_time or end_time but not both
-      time_range: params.time_range,
-      start_time: params.start_time,
-      end_time: params.end_time,
-      granularity: params.granularity,
-    };
-
     try {
-      // For complex queries, we should increase the default limit if not specified
-      const defaultLimit = 100; 
+      const defaultLimit = 100;
       const queryWithLimit = {
-        ...query,
-        limit: query.limit || defaultLimit,
+        ...params,
+        limit: params.limit || defaultLimit,
       };
 
       // Cleanup: Remove undefined parameters to avoid API validation errors
@@ -322,29 +377,25 @@ export class HoneycombAPI {
         links: results.links,
       };
     } catch (error) {
-      // Provide more specific error messages for common API errors
       if (error instanceof HoneycombError) {
+        // For validation errors, enhance with context
         if (error.statusCode === 422) {
-          // Unprocessable Entity - likely parameter validation issues
-          let errorMessage = "Query validation failed: ";
-          
-          // Check for common issues with granularity
-          if (params.granularity !== undefined) {
-            errorMessage += "The granularity parameter might be causing issues. Try: ";
-            errorMessage += "\n1. Ensure you're specifying a time window (time_range or start_time+end_time)";
-            errorMessage += "\n2. Make sure granularity value isn't too small for your time window";
-            errorMessage += "\n3. Consider removing granularity and other advanced parameters for a simpler query first";
-          } else {
-            errorMessage += "Try simplifying your query parameters";
-          }
-          
-          throw new Error(errorMessage);
+          throw HoneycombError.createValidationError(
+            error.message,
+            {
+              environment,
+              dataset: datasetSlug,
+              granularity: params.granularity
+            }
+          );
         }
+        // For other HoneycombErrors, just rethrow them
+        throw error;
       }
       
-      // Default error message
-      throw new Error(
-        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      // For non-Honeycomb errors, wrap in a QueryError
+      throw new QueryError(
+        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"}`
       );
     }
   }
@@ -404,7 +455,7 @@ export class HoneycombAPI {
   }
 
   async getSLOs(environment: string, datasetSlug: string): Promise<SLO[]> {
-    return this.request<SLO[]>(environment, `/1/slos/${datasetSlug}`);
+    return this.requestWithRetry<SLO[]>(environment, `/1/slos/${datasetSlug}`);
   }
 
   async getSLO(
@@ -412,7 +463,7 @@ export class HoneycombAPI {
     datasetSlug: string,
     sloId: string,
   ): Promise<SLODetailedResponse> {
-    return this.request<SLODetailedResponse>(
+    return this.requestWithRetry<SLODetailedResponse>(
       environment,
       `/1/slos/${datasetSlug}/${sloId}`,
       { params: { detailed: true } },
@@ -423,7 +474,7 @@ export class HoneycombAPI {
     environment: string,
     datasetSlug: string,
   ): Promise<TriggerResponse[]> {
-    return this.request<TriggerResponse[]>(
+    return this.requestWithRetry<TriggerResponse[]>(
       environment,
       `/1/triggers/${datasetSlug}`,
     );
@@ -434,7 +485,7 @@ export class HoneycombAPI {
     datasetSlug: string,
     triggerId: string,
   ): Promise<TriggerResponse> {
-    return this.request<TriggerResponse>(
+    return this.requestWithRetry<TriggerResponse>(
       environment,
       `/1/triggers/${datasetSlug}/${triggerId}`,
     );
@@ -444,7 +495,7 @@ export class HoneycombAPI {
   async getBoards(environment: string): Promise<Board[]> {
     try {
       // Make the request to the boards endpoint
-      const response = await this.request<any>(environment, "/1/boards");
+      const response = await this.requestWithRetry<any>(environment, "/1/boards");
       
       // Check if response is already an array (API might return array directly)
       if (Array.isArray(response)) {
@@ -465,26 +516,26 @@ export class HoneycombAPI {
   }
 
   async getBoard(environment: string, boardId: string): Promise<Board> {
-    return this.request<Board>(environment, `/1/boards/${boardId}`);
+    return this.requestWithRetry<Board>(environment, `/1/boards/${boardId}`);
   }
 
   // Marker methods
   async getMarkers(environment: string): Promise<Marker[]> {
-    const response = await this.request<MarkersResponse>(environment, "/1/markers");
+    const response = await this.requestWithRetry<MarkersResponse>(environment, "/1/markers");
     return response.markers;
   }
 
   async getMarker(environment: string, markerId: string): Promise<Marker> {
-    return this.request<Marker>(environment, `/1/markers/${markerId}`);
+    return this.requestWithRetry<Marker>(environment, `/1/markers/${markerId}`);
   }
 
   // Recipient methods
   async getRecipients(environment: string): Promise<Recipient[]> {
-    const response = await this.request<RecipientsResponse>(environment, "/1/recipients");
+    const response = await this.requestWithRetry<RecipientsResponse>(environment, "/1/recipients");
     return response.recipients;
   }
 
   async getRecipient(environment: string, recipientId: string): Promise<Recipient> {
-    return this.request<Recipient>(environment, `/1/recipients/${recipientId}`);
+    return this.requestWithRetry<Recipient>(environment, `/1/recipients/${recipientId}`);
   }
 }
