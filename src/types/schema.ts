@@ -2,7 +2,10 @@ import { z } from "zod";
 
 export const DatasetArgumentsSchema = z.object({
   environment: z.string(),
-  dataset: z.string(),
+  dataset: z.union([
+    z.literal("__all__"),
+    z.string().min(1)
+  ]),
 });
 
 // Add a schema for column-related operations
