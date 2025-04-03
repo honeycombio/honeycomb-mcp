@@ -289,7 +289,7 @@ describe("HoneycombAPI", () => {
         expect(true).toBe(false); // Force failure if we reach this point
       } catch (error) {
         expect(error).toBeInstanceOf(HoneycombError);
-        expect(error.statusCode).toBe(403);
+        expect((error as HoneycombError).statusCode).toBe(403);
       }
     });
 
@@ -384,12 +384,21 @@ describe("HoneycombAPI", () => {
 
       // Check that the first call (create query) doesn't include environment or dataset
       const mockCalls = fetchMock.mock.calls as [string, RequestInit][];
-      expect(mockCalls[0]).toBeDefined();
-      const createQueryCall = JSON.parse(mockCalls[0][1].body as string);
-      expect(createQueryCall).not.toHaveProperty("environment");
-      expect(createQueryCall).not.toHaveProperty("dataset");
-      expect(createQueryCall).toHaveProperty("calculations");
-      expect(createQueryCall).toHaveProperty("time_range");
+      expect(mockCalls.length).toBeGreaterThan(0);
+      
+      // Add a type guard to handle all potential undefined values
+      if (mockCalls[0] && mockCalls[0][1] && mockCalls[0][1].body) {
+        const body = mockCalls[0][1].body as string;
+        const createQueryCall = JSON.parse(body);
+        
+        expect(createQueryCall).not.toHaveProperty("environment");
+        expect(createQueryCall).not.toHaveProperty("dataset");
+        expect(createQueryCall).toHaveProperty("calculations");
+        expect(createQueryCall).toHaveProperty("time_range");
+      } else {
+        // If we don't have a valid body, fail the test
+        expect(mockCalls[0]?.[1]?.body).toBeDefined();
+      }
     });
 
     it("includes rate limit info in error messages", async () => {
