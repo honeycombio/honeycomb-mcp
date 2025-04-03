@@ -350,9 +350,13 @@ export class HoneycombAPI {
   ) {
     try {
       const defaultLimit = 100;
+      
+      // Remove both environment and dataset fields from query params
+      const { environment: _, dataset: __, ...queryParams } = params;
+      
       const queryWithLimit = {
-        ...params,
-        limit: params.limit || defaultLimit,
+        ...queryParams,
+        limit: queryParams.limit || defaultLimit,
       };
 
       // Cleanup: Remove undefined parameters to avoid API validation errors
@@ -385,17 +389,19 @@ export class HoneycombAPI {
             {
               environment,
               dataset: datasetSlug,
-              granularity: params.granularity
+              granularity: params.granularity,
+              api_route: `/1/queries/${datasetSlug}`
             }
           );
         }
-        // For other HoneycombErrors, just rethrow them
+        // For other HoneycombErrors, just rethrow them with route info
+        error.message = `${error.message} (API route: /1/queries/${datasetSlug})`;
         throw error;
       }
       
-      // For non-Honeycomb errors, wrap in a QueryError
+      // For non-Honeycomb errors, wrap in a QueryError with route info
       throw new QueryError(
-        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"} (API route: /1/queries/${datasetSlug})`
       );
     }
   }

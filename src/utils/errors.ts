@@ -1,6 +1,13 @@
 /**
  * Base error class for Honeycomb API errors
  */
+export interface ValidationErrorContext {
+  environment?: string;
+  dataset?: string;
+  granularity?: number;
+  api_route?: string;
+}
+
 export class HoneycombError extends Error {
   constructor(
     public statusCode: number,
@@ -16,34 +23,26 @@ export class HoneycombError extends Error {
    */
   static createValidationError(
     message: string,
-    context?: {
-      environment?: string;
-      dataset?: string;
-      granularity?: number;
-    }
+    context: ValidationErrorContext
   ): HoneycombError {
-    const suggestions: string[] = [];
-    let enhancedMessage = "Query validation failed: ";
+    const contextStr = Object.entries(context)
+      .filter(([_, value]) => value !== undefined)
+      .map(([key, value]) => `${key}="${value}"`)
+      .join(", ");
+    
+    const suggestions: string[] = [
+      `Try using mcp_honeycomb_get_columns with ${contextStr} to see available columns and their types.`,
+      "Please verify:",
+      "- The environment name is correct and configured in .mcp-honeycomb.json",
+      "- Your API key is valid",
+      "- The dataset exists and you have access to it",
+      "- Your query parameters are valid"
+    ];
 
-    if (context?.granularity !== undefined) {
-      enhancedMessage += "The granularity parameter might be causing issues. Try: ";
-      suggestions.push(
-        "1. Ensure you're specifying a time window (time_range or start_time+end_time)",
-        "2. Make sure granularity value isn't too small for your time window",
-        "3. Consider removing granularity and other advanced parameters for a simpler query first"
-      );
-    } else {
-      enhancedMessage += message;
-    }
-
-    // Add get-columns suggestion if we have environment and dataset context
-    if (context?.environment && context?.dataset) {
-      suggestions.push(
-        `Try using mcp_honeycomb_get_columns with environment="${context.environment}" and dataset="${context.dataset}" to see available columns and their types.`
-      );
-    }
-
-    return new HoneycombError(422, enhancedMessage, suggestions);
+    return new HoneycombError(
+      422,
+      `Query validation failed: ${message}\n\nSuggested next steps:\n- ${contextStr}\n\nPlease verify:\n- The environment name is correct and configured in .mcp-honeycomb.json\n- Your API key is valid\n- The dataset exists and you have access to it\n- Your query parameters are valid`
+    );
   }
 
   /**
