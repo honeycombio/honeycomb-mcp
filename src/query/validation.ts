@@ -5,59 +5,61 @@ import { QueryError } from "../utils/errors.js";
 function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {
   // THE RULES:
   // 
-  // A range of time must exist. It can be one of:
+  // A range of time need not exist (it will default to 2hrs).
+  //
+  // If a time range exists, it can be one of:
   // - time_range
   // - start_time and end_time
   // - time_range and start_time
   // - time_range and end_time
   //
   // A granularity may be specified, but it is not required.
-  // valid granularity is, for the time span T, between T/10 and T/1000
+  // If it's 0, it will default to "auto", same as unspecified.
+  // A non-0 valid granularity is, for the time span T, between T/10 and T/1000.
   
   const { time_range, start_time, end_time, granularity } = params;
-  let timeSpan: number | undefined;
+  let explicitTimeSpan: number | undefined;
   const hasTimeRange = time_range !== undefined;
   const hasStartTime = start_time !== undefined;
   const hasEndTime = end_time !== undefined;
 
+  if (hasTimeRange && hasStartTime && hasEndTime) {
+    throw new QueryError(
+      "Invalid time parameters: time_range, start_time, and end_time cannot all be specified together",
+      ["Only one of time_range, time range and start_time, or time range and end_time can be specified"]
+    );
+  }
+
   if (hasTimeRange) {
-    timeSpan = time_range;
+    explicitTimeSpan = time_range;
     if (hasStartTime) {
-      timeSpan = start_time + time_range;
+      explicitTimeSpan = start_time + time_range;
     } else if (hasEndTime) {
-      timeSpan = end_time - time_range;
+      explicitTimeSpan = end_time - time_range;
     }  
   } else if (hasStartTime && hasEndTime) {
     // Both start_time and end_time exist
-    timeSpan = end_time - start_time;
+    explicitTimeSpan = end_time - start_time;
     
-    if (timeSpan <= 0) {
+    if (explicitTimeSpan <= 0) {
       throw new QueryError(
         "Invalid time parameters: negative time range",
         ["Ensure that end_time is after start_time"]
       );
     }
-  } else {
-    throw new QueryError(
-      "Missing required time parameters",
-      [
-        "Provide either time_range, or both start_time and end_time",
-        "Alternatively, provide time_range with either start_time or end_time"
-      ]
-    );
   }
   
   // Validate granularity if specified
-  if (granularity !== undefined && timeSpan) {
-    const minGranularity = timeSpan / 1000;
-    const maxGranularity = timeSpan / 10;
+  if (granularity !== undefined && granularity != 0 && explicitTimeSpan) {
+    const minGranularity = explicitTimeSpan / 1000;
+    const maxGranularity = explicitTimeSpan / 10;
     
     if (granularity < minGranularity || granularity > maxGranularity) {
       throw new QueryError(
-        `Invalid granularity: ${granularity} is outside the valid range`,
+        `Invalid granularity: ${granularity} is outside the valid range of ${minGranularity} to ${maxGranularity}`,
         [
           `Granularity must be between ${minGranularity} and ${maxGranularity} for the given time span`,
-          `For this time span (${timeSpan}), granularity should be between ${Math.ceil(minGranularity)} and ${Math.floor(maxGranularity)}`
+          `For this time span (${explicitTimeSpan}), granularity should be between ${Math.ceil(minGranularity)} and ${Math.floor(maxGranularity)}`
         ]
       );
     }
