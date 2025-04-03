@@ -29,15 +29,6 @@ export class HoneycombError extends Error {
       .filter(([_, value]) => value !== undefined)
       .map(([key, value]) => `${key}="${value}"`)
       .join(", ");
-    
-    const suggestions: string[] = [
-      `Try using mcp_honeycomb_get_columns with ${contextStr} to see available columns and their types.`,
-      "Please verify:",
-      "- The environment name is correct and configured in .mcp-honeycomb.json",
-      "- Your API key is valid",
-      "- The dataset exists and you have access to it",
-      "- Your query parameters are valid"
-    ];
 
     return new HoneycombError(
       422,
