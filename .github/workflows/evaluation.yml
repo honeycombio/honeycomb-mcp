@@ -33,6 +33,11 @@ jobs:
       - name: Build project
         run: pnpm run build
         
+      - name: Create MCP config
+        run: |
+          echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
+          echo "Created MCP config file"
+          
       - name: Run evaluations
         run: pnpm run eval
         env:
@@ -41,6 +46,7 @@ jobs:
           # Use only limited models for CI to save costs
           EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
           EVAL_CONCURRENCY: 2
+          MCP_SERVER_COMMAND: "node build/index.mjs"
           
       - name: Find latest report
         id: find-report
