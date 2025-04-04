@@ -1,4 +1,4 @@
-name: Tests
+name: Tests & Evaluation
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
   pull_request:
     # Run on all pull requests, regardless of target branch
 
-# Add permissions to allow workflow_run events to trigger other workflows
+# Add permissions to allow PR comments
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   actions: read
 
 jobs:
@@ -54,6 +54,79 @@ jobs:
       
     - name: Build
       run: pnpm build
-      
-    # We've removed the evaluation steps from here
-    # They will run in a separate workflow after all tests pass
+
+  # New job that runs after all test matrix jobs complete
+  evaluate:
+    name: Run Evaluations
+    # This job will only run if all test jobs succeed
+    needs: test
+    runs-on: ubuntu-latest
+    # Special handling for main branch
+    if: success()
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup PNPM
+      uses: pnpm/action-setup@v2
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'pnpm'
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Create MCP config
+      run: |
+        echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
+        echo "Created MCP config file"
+    
+    - name: Run evaluations
+      run: pnpm run eval
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        # Use only limited models for CI to save costs
+        EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
+        EVAL_CONCURRENCY: 2
+        MCP_SERVER_COMMAND: "node build/index.mjs"
+    
+    - name: Find latest report
+      id: find-report
+      run: |
+        LATEST_REPORT=$(ls -t eval/reports/*.html | head -1 || echo "")
+        echo "latest_report=$LATEST_REPORT" >> $GITHUB_OUTPUT
+    
+    - name: Post report summary
+      run: |
+        echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
+        echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Latest report: $(basename ${{ steps.find-report.outputs.latest_report }})" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
+        
+        # Add PR comment if we're on a PR
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          PR_COMMENT="## Honeycomb MCP Evaluation Results\n\n"
+          PR_COMMENT+="✅ Evaluations completed successfully\n\n"
+          PR_COMMENT+="Download the full report from the workflow artifacts"
+          
+          echo -e "$PR_COMMENT" > pr_comment.txt
+          
+          gh pr comment ${{ github.event.pull_request.number }} --body-file pr_comment.txt
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
+    
+    # Upload evaluation reports as artifacts
+    - name: Upload evaluation reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: evaluation-reports
+        path: eval/reports/
+        retention-days: 30

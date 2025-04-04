@@ -1,138 +1,17 @@
-name: Run Evaluations
+name: Deploy Reports to GitHub Pages
 
-# Run this workflow after all tests have completed (for both main and PR)
+# This workflow only runs on the main branch to deploy reports to GitHub Pages
 on:
+  # Only runs on the main branch after tests+evals complete
   workflow_run:
-    workflows: ["Tests"]
-    types:
-      - completed
-    branches-ignore: []  # Remove branch restrictions to run on all branches
-  workflow_dispatch:
+    workflows: ["Tests & Evaluation"]
+    types: [completed]
+    branches: [main]
 
 jobs:
-  evaluate:
-    # Only run if the tests workflow succeeded
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
-    # Set proper permissions to handle both PR and main branch workflows
-    permissions:
-      contents: read
-      pull-requests: write
-      
-    steps:
-      # Debug workflow_run event
-      - name: Debug workflow_run event
-        if: github.event_name == 'workflow_run'
-        run: |
-          echo "Workflow run event detected!"
-          echo "Workflow name: ${{ github.event.workflow_run.name }}"
-          echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
-          echo "Head branch: ${{ github.event.workflow_run.head_branch }}"
-          echo "Repository: ${{ github.event.workflow_run.head_repository.full_name }}"
-          echo "Event trigger: ${{ github.event.workflow_run.event }}"
-          echo "PR info: ${{ toJson(github.event.workflow_run.pull_requests) }}"
-      
-      # Special checkout for workflow_run events
-      - name: Checkout PR code (for workflow_run)
-        if: github.event_name == 'workflow_run'
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_branch }}
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          
-      # Standard checkout for other events
-      - name: Checkout code (for workflow_dispatch)
-        if: github.event_name != 'workflow_run'
-        uses: actions/checkout@v4
-      
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'pnpm'
-          
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        
-      - name: Build project
-        run: pnpm run build
-        
-      - name: Create MCP config
-        run: |
-          echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
-          echo "Created MCP config file"
-          
-      - name: Run evaluations
-        run: pnpm run eval
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Use only limited models for CI to save costs
-          EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
-          EVAL_CONCURRENCY: 2
-          MCP_SERVER_COMMAND: "node build/index.mjs"
-          
-      - name: Find latest report
-        id: find-report
-        run: |
-          LATEST_REPORT=$(ls -t eval/reports/*.html | head -1)
-          echo "latest_report=$LATEST_REPORT" >> $GITHUB_OUTPUT
-          
-      - name: Post report summary for PR
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
-        run: |
-          # Get PR number from workflow run
-          PR_NUMBER=$(echo "${{ github.event.workflow_run.pull_requests[0].number }}")
-          
-          echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
-          echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Latest report: $(basename ${{ steps.find-report.outputs.latest_report }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
-          
-          # Add PR comment
-          if [ ! -z "$PR_NUMBER" ]; then
-            # Format comment
-            PR_COMMENT="## Honeycomb MCP Evaluation Results\n\n"
-            PR_COMMENT+="✅ Evaluations completed successfully\n\n"
-            PR_COMMENT+="Download the full report from the workflow artifacts: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            
-            echo -e "$PR_COMMENT" > pr_comment.txt
-            
-            # Post comment to PR
-            gh pr comment $PR_NUMBER --body-file pr_comment.txt
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          
-      - name: Post report summary for direct run
-        if: github.event_name != 'workflow_run'
-        run: |
-          echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
-          echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Latest report: $(basename ${{ steps.find-report.outputs.latest_report }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
-      
-      # Always upload reports as artifacts (using v4)
-      - name: Upload reports artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: evaluation-reports
-          path: eval/reports/
-          retention-days: 30
-          
-  # Separate job for GitHub Pages deployment (only runs on main branch)
-  deploy:
-    needs: evaluate
-    if: github.ref == 'refs/heads/main'
+  # Only deploy to GitHub Pages from the main branch
+  deploy-pages:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -143,10 +22,38 @@ jobs:
       
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/github-script@v6
         with:
-          name: evaluation-reports
-          path: reports
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }}
+            });
+            
+            const matchArtifact = artifacts.data.artifacts.find(artifact => {
+              return artifact.name === "evaluation-reports"
+            });
+            
+            if (!matchArtifact) {
+              core.setFailed('No evaluation-reports artifact found');
+              return;
+            }
+            
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: matchArtifact.id,
+              archive_format: 'zip'
+            });
+            
+            const fs = require('fs');
+            fs.writeFileSync('reports.zip', Buffer.from(download.data));
+            
+      - name: Unzip artifact
+        run: |
+          mkdir -p reports
+          unzip reports.zip -d reports
           
       - name: Setup Pages
         uses: actions/configure-pages@v4
