@@ -4,3 +4,4 @@ build
 .mcp-honeycomb.json
 eval/results/
 eval/reports/
+.DS_Store
