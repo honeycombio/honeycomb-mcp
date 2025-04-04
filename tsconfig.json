@@ -14,6 +14,6 @@
     "strictNullChecks": true,
     "noEmitOnError": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "eval/**/*"],
   "exclude": ["node_modules", "build"]
 }

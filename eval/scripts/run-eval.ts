@@ -74,11 +74,23 @@ class OpenAIProvider implements LLMProvider {
       
       // Reset context after call
       this.isToolCall = false;
-      
-      return response.choices[0].message.content || '';
+
+      if (!response.choices || response.choices.length === 0) {
+        return `Got empty response from OpenAI`;
+      }
+
+      if (!response.choices[0]?.message) {
+        return `Got empty response from OpenAI`;
+      }
+
+      if (!response.choices[0].message.content) {
+        return `Got empty response from OpenAI`;
+      } 
+
+      return response.choices[0].message.content;
     } catch (error) {
       console.error('OpenAI API error:', error);
-      return `SCORE: 0\nPASSED: false\nREASONING: Error calling OpenAI API: ${error.message}`;
+      return `SCORE: 0\nPASSED: false\nREASONING: Error calling OpenAI API: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
@@ -153,14 +165,14 @@ class AnthropicProvider implements LLMProvider {
       // Reset context after call
       this.isToolCall = false;
 
-      if (response.content[0].type === 'text') {
-        return response.content[0].text;
+      if (response.content?.[0]?.type === 'text') {
+        return response.content[0].text as string;
        } else {
-        return `Got ${response.content[0].type} response, expected text`;
+        return `Got ${response.content?.[0]?.type || 'unknown'} response, expected text`;
       }
     } catch (error) {
       console.error('Anthropic API error:', error);
-      return `SCORE: 0\nPASSED: false\nREASONING: Error calling Anthropic API: ${error.message}`;
+      return `SCORE: 0\nPASSED: false\nREASONING: Error calling Anthropic API: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
@@ -189,7 +201,7 @@ async function generateReportIndex(reportsDir: string): Promise<void> {
   const reports = reportFiles.map((file, index) => {
     const isLatest = index === 0;
     const dateMatch = file.match(/report-(.+)\.html/);
-    const dateStr = dateMatch ? dateMatch[1].replace(/-/g, ':').replace('T', ' ').substr(0, 19) : 'Unknown date';
+    const dateStr = dateMatch && dateMatch[1] ? dateMatch[1].replace(/-/g, ':').replace('T', ' ').substring(0, 19) : 'Unknown date';
     
     return {
       filename: file,
@@ -304,7 +316,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       provider: summary.metadata.judge.provider,
       model: summary.metadata.judge.model
     } : null,
-    results: summary.results.map(result => {
+    results: summary.results.map((result: any) => {
       const isAgent = result.prompt.agentMode;
       const isConversation = result.prompt.conversationMode;
       const isMultiStep = result.prompt.steps && result.prompt.steps.length > 0;
@@ -315,7 +327,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       
       // Format tool calls
       const hasToolCalls = result.toolCalls && result.toolCalls.length > 0;
-      const toolCalls = hasToolCalls ? result.toolCalls.map((call, idx) => ({
+      const toolCalls = hasToolCalls ? result.toolCalls.map((call: any, idx: number) => ({
         tool: call.tool || 'N/A',
         index: idx + 1,
         parametersJson: JSON.stringify(call.parameters || {}, null, 2),

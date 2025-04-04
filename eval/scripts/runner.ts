@@ -3,7 +3,7 @@ import path from 'path';
 import { EvalPrompt, EvalResult, EvalSummary, LLMProvider } from './types.js';
 import { Client as MCPClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
 
 interface RunnerConfig {
   promptsDir: string;
@@ -161,6 +161,9 @@ export class EvalRunner {
       throw new Error('MCP client not initialized');
     }
     
+    // Ensure prompt has an ID
+    const promptId = prompt.id || `unknown-${Date.now()}`;
+    
     const startTime = Date.now();
     
     try {
@@ -232,8 +235,8 @@ export class EvalRunner {
       const validationResponse = await judgeProvider.runPrompt(validationPrompt, judgeModel);
       
       // Parse validation response
-      let score, passed, reasoning;
-      let agentScores = undefined;
+      let score: number, passed: boolean, reasoning: string;
+      let agentScores = { goalAchievement: 0, reasoningQuality: 0, pathEfficiency: 0 };
       
       if (prompt.agentMode) {
         // Parse agent-specific validation response
@@ -245,16 +248,16 @@ export class EvalRunner {
         const reasoningMatch = validationResponse.match(/REASONING:\s*([\s\S]+)/);
         
         // Extract agent-specific scores
-        const goalAchievement = goalMatch ? parseFloat(goalMatch[1]) : 0;
-        const reasoningQuality = reasoningQualityMatch ? parseFloat(reasoningQualityMatch[1]) : 0;
-        const pathEfficiency = pathEfficiencyMatch ? parseFloat(pathEfficiencyMatch[1]) : 0;
+        const goalAchievement = goalMatch && goalMatch[1] ? parseFloat(goalMatch[1]) : 0;
+        const reasoningQuality = reasoningQualityMatch && reasoningQualityMatch[1] ? parseFloat(reasoningQualityMatch[1]) : 0;
+        const pathEfficiency = pathEfficiencyMatch && pathEfficiencyMatch[1] ? parseFloat(pathEfficiencyMatch[1]) : 0;
         
         // Use overall score for the main score
-        score = overallScoreMatch ? parseFloat(overallScoreMatch[1]) : 
+        score = overallScoreMatch && overallScoreMatch[1] ? parseFloat(overallScoreMatch[1]) : 
                (goalAchievement + reasoningQuality + pathEfficiency) / 3; // Average if overall not provided
         
-        passed = passedMatch ? passedMatch[1].toLowerCase() === 'true' : false;
-        reasoning = reasoningMatch ? reasoningMatch[1].trim() : validationResponse;
+        passed = passedMatch && passedMatch[1] ? passedMatch[1].toLowerCase() === 'true' : false;
+        reasoning = reasoningMatch && reasoningMatch[1] ? reasoningMatch[1].trim() : validationResponse;
         
         // Store agent-specific scores
         agentScores = {
@@ -268,16 +271,16 @@ export class EvalRunner {
         const passedMatch = validationResponse.match(/PASSED:\s*(true|false)/i);
         const reasoningMatch = validationResponse.match(/REASONING:\s*([\s\S]+)/);
         
-        score = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
-        passed = passedMatch ? passedMatch[1].toLowerCase() === 'true' : false;
-        reasoning = reasoningMatch ? reasoningMatch[1].trim() : validationResponse;
+        score = scoreMatch && scoreMatch[1] ? parseFloat(scoreMatch[1]) : 0;
+        passed = passedMatch && passedMatch[1] ? passedMatch[1].toLowerCase() === 'true' : false;
+        reasoning = reasoningMatch && reasoningMatch[1] ? reasoningMatch[1].trim() : validationResponse;
       }
       
       const tokenUsage = provider.getTokenUsage();
       
       // Create result object with appropriate fields
       const result: EvalResult = {
-        id: prompt.id,
+        id: promptId,
         timestamp: new Date().toISOString(),
         prompt,
         toolCalls,
@@ -319,15 +322,15 @@ export class EvalRunner {
       const endTime = Date.now();
       
       return {
-        id: prompt.id,
+        id: promptId,
         timestamp: new Date().toISOString(),
         prompt,
-        toolResponse: { error: error.message },
+        toolResponse: { error: error instanceof Error ? error.message : String(error) },
         toolCalls: [],
         validation: {
           passed: false,
           score: 0,
-          reasoning: `Tool execution failed with error: ${error.message}`
+          reasoning: `Tool execution failed with error: ${error instanceof Error ? error.message : String(error)}`
         },
         metrics: {
           startTime,
@@ -432,7 +435,7 @@ REASONING: [your detailed explanation]
       throw new Error('MCP client not initialized');
     }
     
-    const toolCalls = [];
+    const toolCalls: any[] = [];
     const stepResults: Record<number, any> = {}; // Store results by step index for reference
     
     for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
@@ -468,7 +471,7 @@ REASONING: [your detailed explanation]
         toolCalls.push({
           tool: step.tool,
           parameters: expandedParameters,
-          response: { error: error.message },
+          response: { error: error instanceof Error ? error.message : String(error) },
           timestamp: new Date(callStartTime).toISOString(),
           latencyMs: Date.now() - callStartTime
         });
@@ -628,7 +631,7 @@ REASONING: [your detailed explanation]
     });
     
     // Set up conversation tracking
-    const toolCalls = [];
+    const toolCalls: any[] = [];
     const maxSteps = prompt.maxSteps || 5; // Default to 5 if not specified
     let conversationContext = `
 You are performing a multi-step data analysis task. Your goal is to use the available tools to progressively analyze data, where each step builds on information from previous steps.
@@ -716,7 +719,7 @@ When you've completed the analysis, respond with:
       }
       
       try {
-        const parsedResponse = JSON.parse(jsonMatch[1]);
+        const parsedResponse = JSON.parse(jsonMatch[1] || '{}');
         
         // Check if done
         if (parsedResponse.done) {
@@ -747,10 +750,15 @@ When you've completed the analysis, respond with:
         console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
         
         const callStartTime = Date.now();
-        const response = await this.client.callTool({
-          name: tool,
-          arguments: processedParameters
-        });
+        let response;
+        try {
+          response = await this.client.callTool({
+            name: tool,
+            arguments: processedParameters
+          });
+        } catch (error) {
+          response = { error: error instanceof Error ? error.message : String(error) };
+        }
         const callEndTime = Date.now();
         
         // Record the tool call
@@ -780,14 +788,14 @@ What would you like to do next? Remember to:
       } catch (error) {
         // Handle errors in the conversation
         toolCalls.push({
-          error: `Error in conversation step ${stepCount}: ${error.message}`,
+          error: `Error in conversation step ${stepCount}: ${error instanceof Error ? error.message : String(error)}`,
           timestamp: new Date().toISOString(),
           latencyMs: 0
         });
         
         // Update context with error and more guidance
         conversationContext += `\n\n## Error in Step ${stepCount}:
-Error: ${error.message}
+Error: ${error instanceof Error ? error.message : String(error)}
 
 This might be because:
 - Required parameters were missing (especially "environment")
@@ -897,7 +905,7 @@ ${exampleBlock}
     const toolDocs = this.buildEnhancedToolDocs(toolsResult.tools, environment);
     
     // Set up tracking
-    const toolCalls = [];
+    const toolCalls: any[] = [];
     const maxSteps = prompt.maxSteps || 8;
     
     // Initialize agent context with thoughtful structure
@@ -982,7 +990,7 @@ OR, if you've completed your analysis:
       }
       
       try {
-        const parsedResponse = JSON.parse(jsonMatch[1]);
+        const parsedResponse = JSON.parse(jsonMatch[1] || '{}');
         
         // Check if agent is done
         if (parsedResponse.complete) {
@@ -1025,7 +1033,7 @@ OR, if you've completed your analysis:
             arguments: processedParameters
           });
         } catch (error) {
-          response = { error: error.message };
+          response = { error: error instanceof Error ? error.message : String(error) };
         }
         const callEndTime = Date.now();
         
@@ -1062,14 +1070,14 @@ Now analyze this information and determine your next step. Remember to:
       } catch (error) {
         // Handle JSON parsing or other errors
         toolCalls.push({
-          error: `Error in agent step ${stepCount}: ${error.message}`,
+          error: `Error in agent step ${stepCount}: ${error instanceof Error ? error.message : String(error)}`,
           timestamp: new Date().toISOString(),
           latencyMs: 0
         });
         
         // Update context with error guidance
         agentContext += `\n\n## Error in Step ${stepCount}:
-Error: ${error.message}
+Error: ${error instanceof Error ? error.message : String(error)}
 
 This might be because:
 - The JSON format was incorrect
@@ -1101,10 +1109,10 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
       // If we have a properties object and required array
       if (parameters.properties && parameters.required) {
         const requiredParams = parameters.required;
-        const paramDescriptions = [];
+        const paramDescriptions: string[] = [];
         
         // For each property, check if it's required
-        for (const [name, details] of Object.entries(parameters.properties)) {
+        for (const [name, details] of Object.entries(parameters.properties as Record<string, {type?: string; description?: string}>)) {
           const isRequired = requiredParams.includes(name);
           const type = details.type || 'any';
           const description = details.description || '';
@@ -1138,7 +1146,7 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
     }
     
     // For MAX, AVG, etc. operations, ensure they have a column specified
-    processedParams.calculations = processedParams.calculations.map(calc => {
+    processedParams.calculations = processedParams.calculations.map((calc: any) => {
       if (calc.op && !calc.column && calc.field) {
         // Some models might use 'field' instead of 'column'
         return { ...calc, column: calc.field };
@@ -1182,10 +1190,10 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
     
     // Fix any orders that reference calculations
     if (processedParams.orders && Array.isArray(processedParams.orders)) {
-      processedParams.orders = processedParams.orders.map(order => {
+      processedParams.orders = processedParams.orders.map((order: any) => {
         if (!order.op && order.column) {
           // Try to match with a calculation
-          const matchingCalc = processedParams.calculations.find(calc => 
+          const matchingCalc = processedParams.calculations.find((calc: any) => 
             calc.column === order.column
           );
           if (matchingCalc) {
@@ -1229,15 +1237,25 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
         
         // For each model for this provider
         for (const modelName of providerModels) {
+          if (!modelName) {
+            console.warn(`No model name provided for provider: ${provider.name}`);
+            continue;
+          }
           console.log(`Running evaluations with provider: ${provider.name}, model: ${modelName}`);
           
           // Use Promise.all with a limitation on concurrency
           const batchSize = this.config.concurrency;
           for (let i = 0; i < prompts.length; i += batchSize) {
             const batch = prompts.slice(i, i + batchSize);
-            const batchResults = await Promise.all(
-              batch.map(prompt => this.runEvaluation(prompt, provider, modelName))
-            );
+            const batchPromises = batch.map(async (prompt: EvalPrompt) => {
+              // Type guard for prompt.id
+              if (!prompt.id) {
+                console.warn('Warning: Prompt missing ID, generating fallback ID');
+                // @ts-ignore - we handle missing ID in runEvaluation
+              }
+              return this.runEvaluation(prompt, provider, modelName);
+            });
+            const batchResults = await Promise.all(batchPromises);
             results.push(...batchResults);
           }
         }

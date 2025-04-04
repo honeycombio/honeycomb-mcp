@@ -42,9 +42,9 @@ jobs:
     
     - name: Install dependencies
       run: pnpm install
-    
-    - name: Run TypeScript type-checking
-      run: pnpm exec tsc --noEmit
+      
+    - name: Typecheck (entire codebase)
+      run: pnpm typecheck
     
     - name: Run tests
       run: pnpm test

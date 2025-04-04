@@ -5,3 +5,4 @@ build
 eval/results/
 eval/reports/
 .DS_Store
+coverage/
