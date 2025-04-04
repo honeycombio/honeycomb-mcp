@@ -160,28 +160,42 @@ export class EvalRunner {
     const startTime = Date.now();
     
     try {
-      // Call the MCP tool
-      console.log(`Calling tool ${prompt.tool} with params`, prompt.parameters);
-      const toolResponse = await this.client.callTool({
-        name: prompt.tool,
-        arguments: prompt.parameters
-      });
+      let toolResponse: any = null;
+      let toolCalls: any[] = [];
+      
+      // Handle different evaluation modes
+      if (prompt.conversationMode) {
+        // Conversation mode: LLM-directed multiple tool calls
+        toolCalls = await this.runConversationMode(prompt, provider, modelName);
+      } else if (prompt.steps && prompt.steps.length > 0) {
+        // Multi-step mode: Pre-defined sequence of tool calls
+        toolCalls = await this.runMultiStepMode(prompt.steps);
+      } else if (prompt.tool && prompt.parameters) {
+        // Single tool mode: Legacy behavior
+        console.log(`Calling tool ${prompt.tool} with params`, prompt.parameters);
+        const callStartTime = Date.now();
+        toolResponse = await this.client.callTool({
+          name: prompt.tool,
+          arguments: prompt.parameters
+        });
+        const callEndTime = Date.now();
+        
+        // Still record the call for consistency
+        toolCalls = [{
+          tool: prompt.tool,
+          parameters: prompt.parameters,
+          response: toolResponse,
+          timestamp: new Date(callStartTime).toISOString(),
+          latencyMs: callEndTime - callStartTime
+        }];
+      } else {
+        throw new Error('Invalid prompt configuration: Must specify either tool, steps, or enable conversationMode');
+      }
       
       const endTime = Date.now();
       
-      // Validate the response using an LLM
-      const validationPrompt = `
-Tool: ${prompt.tool}
-Parameters: ${JSON.stringify(prompt.parameters)}
-Response: ${JSON.stringify(toolResponse)}
-
-Validation instructions: ${prompt.validation.prompt}
-
-Score this response (0-1) and explain your reasoning. Format your response as:
-SCORE: [0-1 number]
-PASSED: [true/false]
-REASONING: [your detailed explanation]
-      `;
+      // Create validation prompt with all tool calls
+      const validationPrompt = this.createValidationPrompt(prompt, toolCalls, toolResponse);
       
       const validationResponse = await provider.runPrompt(validationPrompt, modelName);
       
@@ -196,11 +210,12 @@ REASONING: [your detailed explanation]
       
       const tokenUsage = provider.getTokenUsage();
       
-      return {
+      // Create result object with appropriate fields
+      const result: EvalResult = {
         id: prompt.id,
         timestamp: new Date().toISOString(),
         prompt,
-        toolResponse,
+        toolCalls,
         validation: {
           passed,
           score,
@@ -210,11 +225,20 @@ REASONING: [your detailed explanation]
           startTime,
           endTime,
           latencyMs: endTime - startTime,
-          tokenUsage
+          tokenUsage,
+          toolCallCount: toolCalls.length,
+          stepCount: prompt.conversationMode ? toolCalls.length : undefined
         },
         provider: provider.name,
         model: modelName
       };
+      
+      // For backward compatibility
+      if (toolResponse !== null) {
+        result.toolResponse = toolResponse;
+      }
+      
+      return result;
     } catch (error) {
       const endTime = Date.now();
       
@@ -223,6 +247,7 @@ REASONING: [your detailed explanation]
         timestamp: new Date().toISOString(),
         prompt,
         toolResponse: { error: error.message },
+        toolCalls: [],
         validation: {
           passed: false,
           score: 0,
@@ -232,12 +257,239 @@ REASONING: [your detailed explanation]
           startTime,
           endTime,
           latencyMs: endTime - startTime,
-          tokenUsage: { prompt: 0, completion: 0, total: 0 }
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+          toolCallCount: 0
         },
         provider: provider.name,
         model: modelName
       };
     }
+  }
+  
+  /**
+   * Create a validation prompt for the LLM to evaluate
+   */
+  private createValidationPrompt(prompt: EvalPrompt, toolCalls: any[], singleToolResponse: any = null): string {
+    let validationPrompt = '';
+    
+    // For single-tool mode with backward compatibility
+    if (singleToolResponse !== null && prompt.tool && prompt.parameters) {
+      validationPrompt = `
+Tool: ${prompt.tool}
+Parameters: ${JSON.stringify(prompt.parameters)}
+Response: ${JSON.stringify(singleToolResponse)}
+`;
+    } 
+    // For multi-step or conversation mode
+    else {
+      validationPrompt = `
+Evaluation of ${toolCalls.length} tool call${toolCalls.length !== 1 ? 's' : ''}:
+
+${toolCalls.map((call, index) => `
+--- Tool Call ${index + 1} ---
+Tool: ${call.tool}
+Parameters: ${JSON.stringify(call.parameters)}
+Response: ${JSON.stringify(call.response)}
+`).join('\n')}
+`;
+    }
+    
+    validationPrompt += `
+Validation instructions: ${prompt.validation.prompt}
+
+Score this response (0-1) and explain your reasoning. Format your response as:
+SCORE: [0-1 number]
+PASSED: [true/false]
+REASONING: [your detailed explanation]
+`;
+    
+    return validationPrompt;
+  }
+  
+  /**
+   * Run a pre-defined sequence of tool calls
+   */
+  private async runMultiStepMode(steps: any[]): Promise<any[]> {
+    if (!this.client) {
+      throw new Error('MCP client not initialized');
+    }
+    
+    const toolCalls = [];
+    
+    for (const step of steps) {
+      console.log(`Calling tool ${step.tool} with params`, step.parameters);
+      const callStartTime = Date.now();
+      
+      try {
+        const response = await this.client.callTool({
+          name: step.tool,
+          arguments: step.parameters
+        });
+        
+        const callEndTime = Date.now();
+        
+        toolCalls.push({
+          tool: step.tool,
+          parameters: step.parameters,
+          response,
+          timestamp: new Date(callStartTime).toISOString(),
+          latencyMs: callEndTime - callStartTime
+        });
+      } catch (error) {
+        // Record the error but continue with next steps
+        toolCalls.push({
+          tool: step.tool,
+          parameters: step.parameters,
+          response: { error: error.message },
+          timestamp: new Date(callStartTime).toISOString(),
+          latencyMs: Date.now() - callStartTime
+        });
+      }
+    }
+    
+    return toolCalls;
+  }
+  
+  /**
+   * Run conversation mode where an LLM drives tool selection
+   * This would typically involve:
+   * 1. LLM decides which tool to call
+   * 2. Tool is called and result is returned to LLM
+   * 3. LLM decides next action until completion
+   * 
+   * Note: This is a simplified implementation. A full implementation would use
+   * a proper agent framework or MCP conversation API.
+   */
+  private async runConversationMode(prompt: EvalPrompt, provider: LLMProvider, modelName: string): Promise<any[]> {
+    if (!this.client) {
+      throw new Error('MCP client not initialized');
+    }
+    
+    // Get available tools
+    const toolsResult = await this.client.listTools();
+    const availableTools = toolsResult.tools.map(t => ({
+      name: t.name,
+      description: t.description || 'No description available',
+      parameters: t.parameters || {}
+    }));
+    
+    // Set up conversation tracking
+    const toolCalls = [];
+    const maxSteps = prompt.maxSteps || 5; // Default to 5 if not specified
+    let conversationContext = `
+You are performing a task for evaluation. Your goal is to use the available tools to accomplish the task.
+${prompt.prompt}
+
+Available tools:
+${availableTools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
+
+When you want to use a tool, respond in the following format:
+\`\`\`json
+{
+  "tool": "tool_name",
+  "parameters": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+\`\`\`
+
+After you receive the tool response, you can either:
+1. Use another tool by responding in the same JSON format
+2. Indicate you're done by responding with:
+\`\`\`json
+{ "done": true, "explanation": "Your explanation of how you accomplished the task" }
+\`\`\`
+`;
+    
+    // Start conversation loop
+    let done = false;
+    let stepCount = 0;
+    
+    while (!done && stepCount < maxSteps) {
+      stepCount++;
+      
+      // Ask LLM what tool to use
+      const llmResponse = await provider.runPrompt(conversationContext, modelName);
+      
+      // Extract JSON from response
+      const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (!jsonMatch) {
+        toolCalls.push({
+          error: "LLM response did not contain valid JSON",
+          response: llmResponse,
+          timestamp: new Date().toISOString(),
+          latencyMs: 0
+        });
+        break;
+      }
+      
+      try {
+        const parsedResponse = JSON.parse(jsonMatch[1]);
+        
+        // Check if done
+        if (parsedResponse.done) {
+          done = true;
+          toolCalls.push({
+            done: true,
+            explanation: parsedResponse.explanation || "Task completed",
+            timestamp: new Date().toISOString(),
+            latencyMs: 0
+          });
+          break;
+        }
+        
+        // Call the requested tool
+        const { tool, parameters } = parsedResponse;
+        console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, parameters);
+        
+        const callStartTime = Date.now();
+        const response = await this.client.callTool({
+          name: tool,
+          arguments: parameters
+        });
+        const callEndTime = Date.now();
+        
+        // Record the tool call
+        const toolCall = {
+          tool,
+          parameters,
+          response,
+          timestamp: new Date(callStartTime).toISOString(),
+          latencyMs: callEndTime - callStartTime
+        };
+        toolCalls.push(toolCall);
+        
+        // Update conversation context
+        conversationContext += `\n\nYou called tool: ${tool}
+Parameters: ${JSON.stringify(parameters)}
+Tool response: ${JSON.stringify(response)}
+
+What would you like to do next?`;
+        
+      } catch (error) {
+        // Handle errors in the conversation
+        toolCalls.push({
+          error: `Error in conversation step ${stepCount}: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          latencyMs: 0
+        });
+        
+        // Update context with error
+        conversationContext += `\n\nError: ${error.message}\nPlease try again or try a different tool.`;
+      }
+    }
+    
+    // If we hit the step limit
+    if (!done && stepCount >= maxSteps) {
+      toolCalls.push({
+        error: `Reached maximum conversation steps (${maxSteps})`,
+        timestamp: new Date().toISOString(),
+        latencyMs: 0
+      });
+    }
+    
+    return toolCalls;
   }
 
   async runAll(): Promise<EvalSummary> {
@@ -275,6 +527,12 @@ REASONING: [your detailed explanation]
       // Prepare summary
       const passed = results.filter(r => r.validation.passed).length;
       
+      // Calculate average tool calls
+      const totalToolCalls = results.reduce((sum, r) => {
+        return sum + (r.metrics.toolCallCount || 0);
+      }, 0);
+      const averageToolCalls = totalToolCalls / results.length;
+      
       const summary: EvalSummary = {
         timestamp: new Date().toISOString(),
         totalTests: results.length,
@@ -282,6 +540,7 @@ REASONING: [your detailed explanation]
         failed: results.length - passed,
         successRate: passed / results.length,
         averageLatency: results.reduce((sum, r) => sum + r.metrics.latencyMs, 0) / results.length,
+        averageToolCalls,
         results,
         metadata: {
           providers: this.config.providers.map(p => p.name),

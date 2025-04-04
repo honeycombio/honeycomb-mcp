@@ -151,6 +151,11 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
     .result-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px; }
     .code { font-family: monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
     .token-usage { margin-top: 10px; font-size: 0.9em; color: #666; }
+    .tool-calls { margin-top: 20px; }
+    .tool-call { margin-bottom: 15px; padding: 10px; border-left: 3px solid #F5A623; background: #fffbf4; }
+    .multi-step-label { background: #f0f8ff; border-radius: 3px; padding: 3px 6px; color: #0066cc; font-size: 0.8em; margin-left: 8px; }
+    .conversation-label { background: #f0fff0; border-radius: 3px; padding: 3px 6px; color: #008800; font-size: 0.8em; margin-left: 8px; }
+    .badge { display: inline-block; padding: 0.25em 0.4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: 0.25rem; }
   </style>
 </head>
 <body>
@@ -181,16 +186,21 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
           <div class="label">Avg Latency</div>
           <div class="value">${summary.averageLatency.toFixed(0)}ms</div>
         </div>
+        <div class="stat">
+          <div class="label">Avg Tool Calls</div>
+          <div class="value">${summary.averageToolCalls ? summary.averageToolCalls.toFixed(1) : 'N/A'}</div>
+        </div>
       </div>
     </div>
     
-    <h2>Results by Tool</h2>
+    <h2>Results by Test</h2>
     <table>
       <thead>
         <tr>
-          <th>Tool</th>
           <th>Test ID</th>
+          <th>Type</th>
           <th>Provider / Model</th>
+          <th>Tool Calls</th>
           <th>Status</th>
           <th>Score</th>
           <th>Latency</th>
@@ -199,9 +209,16 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       <tbody>
         ${summary.results.map(result => `
           <tr>
-            <td>${result.prompt.tool}</td>
             <td>${result.id}</td>
+            <td>
+              ${result.prompt.conversationMode 
+                ? `<span class="badge conversation-label">Conversation</span>` 
+                : result.prompt.steps && result.prompt.steps.length > 0 
+                  ? `<span class="badge multi-step-label">Multi-step</span>` 
+                  : `<span class="badge">Single</span>`}
+            </td>
             <td>${result.provider} / ${result.model}</td>
+            <td>${result.metrics.toolCallCount || 1}</td>
             <td class="${result.validation.passed ? 'success' : 'failure'}">${result.validation.passed ? 'PASS' : 'FAIL'}</td>
             <td>${result.validation.score !== undefined ? result.validation.score.toFixed(2) : 'N/A'}</td>
             <td>${result.metrics.latencyMs}ms</td>
@@ -213,11 +230,18 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
     <h2>Detailed Results</h2>
     ${summary.results.map(result => `
       <div class="result-details">
-        <h3>${result.id} (${result.prompt.tool})</h3>
+        <h3>${result.id} ${
+          result.prompt.conversationMode 
+            ? `<span class="badge conversation-label">Conversation Mode</span>` 
+            : result.prompt.steps && result.prompt.steps.length > 0 
+              ? `<span class="badge multi-step-label">Multi-step</span>` 
+              : ''
+        }</h3>
         <p><strong>Provider/Model:</strong> ${result.provider}/${result.model}</p>
         <p><strong>Status:</strong> <span class="${result.validation.passed ? 'success' : 'failure'}">${result.validation.passed ? 'PASS' : 'FAIL'}</span></p>
         <p><strong>Score:</strong> ${result.validation.score !== undefined ? result.validation.score.toFixed(2) : 'N/A'}</p>
         <p><strong>Validation Reasoning:</strong> ${result.validation.reasoning}</p>
+        <p><strong>Tool Calls:</strong> ${result.metrics.toolCallCount || 1}</p>
         
         ${result.metrics.tokenUsage?.total ? `
         <div class="token-usage">
@@ -228,10 +252,29 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
         </div>
         ` : ''}
         
-        <details>
-          <summary>Tool Response</summary>
-          <div class="code">${JSON.stringify(result.toolResponse, null, 2)}</div>
-        </details>
+        ${result.toolCalls && result.toolCalls.length > 0 ? `
+          <details>
+            <summary>Tool Calls (${result.toolCalls.length})</summary>
+            <div class="tool-calls">
+              ${result.toolCalls.map((call, index) => `
+                <div class="tool-call">
+                  <h4>Call ${index + 1}: ${call.tool || 'N/A'}</h4>
+                  <p><strong>Parameters:</strong></p>
+                  <div class="code">${JSON.stringify(call.parameters || {}, null, 2)}</div>
+                  <p><strong>Response:</strong></p>
+                  <div class="code">${JSON.stringify(call.response || {}, null, 2)}</div>
+                  <p><small>Latency: ${call.latencyMs || 0}ms</small></p>
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        ` : `
+          <details>
+            <summary>Tool Response</summary>
+            <div class="code">${JSON.stringify(result.toolResponse, null, 2)}</div>
+          </details>
+        `}
+        
         <details>
           <summary>Prompt Details</summary>
           <div class="code">${JSON.stringify(result.prompt, null, 2)}</div>

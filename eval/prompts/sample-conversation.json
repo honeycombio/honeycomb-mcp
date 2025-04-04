@@ -1,0 +1,24 @@
+{
+  "id": "conversation-dataset-exploration",
+  "name": "Conversation Mode Dataset Exploration",
+  "description": "Tests conversation mode to explore available datasets and their columns",
+  "prompt": "I want you to explore the available datasets in the 'ms-demo' environment and find columns related to response time or latency in any of the datasets. Start by listing the available datasets, then examine columns in at least one dataset that might contain latency information.",
+  "conversationMode": true,
+  "maxSteps": 4,
+  "validation": {
+    "prompt": "Evaluate whether the tool calls successfully explored datasets and columns. The sequence should include listing datasets, examining columns in at least one dataset, and identifying any columns related to response time or latency. The exploration should be logical and provide useful information about performance-related metrics in the available datasets.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "First lists available datasets",
+        "Examines columns in at least one dataset",
+        "Identifies columns related to response time or latency if they exist",
+        "Uses a logical sequence of tool calls to explore the data",
+        "Completes the exploration within the maximum allowed steps"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 30000
+  }
+}

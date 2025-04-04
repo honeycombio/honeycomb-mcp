@@ -1,0 +1,44 @@
+{
+  "id": "multi-step-combined-query",
+  "name": "Multi-Step Dataset and Query Test",
+  "description": "Tests a multi-step scenario where dataset information is retrieved and then a query is run",
+  "prompt": "Retrieve information about the 'frontend' dataset and then run a simple count query on it",
+  "steps": [
+    {
+      "tool": "get_columns",
+      "parameters": {
+        "environment": "ms-demo",
+        "dataset": "frontend"
+      },
+      "description": "Get column information for the frontend dataset"
+    },
+    {
+      "tool": "run_query",
+      "parameters": {
+        "environment": "ms-demo",
+        "dataset": "frontend",
+        "calculations": [
+          {
+            "op": "COUNT"
+          }
+        ],
+        "time_range": 60
+      },
+      "description": "Run a simple count query on the frontend dataset"
+    }
+  ],
+  "validation": {
+    "prompt": "Evaluate whether both tool calls were successful. The first response should return column definitions for the 'frontend' dataset, and the second should return a valid COUNT query result. Both responses should be error-free and contain the expected data.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "First call returns column definitions for the frontend dataset",
+        "Second call returns a valid COUNT query result with no errors",
+        "Total latency is reasonable"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 10000
+  }
+}

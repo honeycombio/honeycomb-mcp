@@ -1,18 +1,24 @@
 # Honeycomb MCP Evaluation Framework
 
-This evaluation framework provides a structured way to test and validate the Honeycomb MCP tools. It uses an LLM-based evaluation approach to assess the quality and correctness of tool responses.
+This evaluation framework provides a structured way to test and validate the Honeycomb MCP tools. It uses an LLM-based evaluation approach to assess the quality and correctness of tool responses, with support for both single-step and multi-step evaluations.
 
 ## How It Works
 
 1. **Launching the MCP Server**: The framework can either start the MCP server as a child process or connect to an already running server via HTTP.
 
-2. **Test Execution**: For each test prompt, the framework:
-   - Calls the specified MCP tool with the test parameters
-   - Records the response
-   - Submits the response to an LLM for evaluation based on criteria
-   - Records metrics and validation results
+2. **Test Execution**: The framework supports multiple evaluation modes:
 
-3. **Reporting**: After all tests complete, a summary and detailed HTML report are generated.
+   - **Single Tool Mode**: Calls a single specified tool and evaluates the response
+   - **Multi-Step Mode**: Executes a pre-defined sequence of tool calls and evaluates the combined results
+   - **Conversation Mode**: Uses an LLM to dynamically determine which tools to call in sequence, tracking a full conversation flow
+
+3. **Metrics Collection**: For each test, the framework captures:
+   - Execution time and latency
+   - Tool call counts
+   - Token usage
+   - Validation results
+
+4. **Reporting**: After all tests complete, a summary and detailed HTML report are generated with comprehensive metrics.
 
 ## Directory Structure
 
@@ -23,7 +29,9 @@ This evaluation framework provides a structured way to test and validate the Hon
 
 ## Prompt Schema
 
-Each evaluation prompt is defined as a JSON file with the following structure:
+### Single Tool Mode
+
+The original mode for evaluating a single tool call:
 
 ```json
 {
@@ -52,6 +60,66 @@ Each evaluation prompt is defined as a JSON file with the following structure:
 }
 ```
 
+### Multi-Step Mode
+
+For evaluating a pre-defined sequence of tool calls:
+
+```json
+{
+  "id": "multi-step-test",
+  "name": "Multi-Step Dataset Query Test",
+  "description": "Tests retrieving dataset info then running a query",
+  "prompt": "Get columns then run a query",
+  "steps": [
+    {
+      "tool": "get_columns",
+      "parameters": {
+        "environment": "production",
+        "dataset": "api"
+      },
+      "description": "Get column data"
+    },
+    {
+      "tool": "run_query",
+      "parameters": {
+        "environment": "production",
+        "dataset": "api",
+        "calculations": [{"op": "COUNT"}],
+        "time_range": 60
+      },
+      "description": "Run query"
+    }
+  ],
+  "validation": {
+    "prompt": "Validate that both calls succeeded and returned valid data"
+  },
+  "options": {
+    "timeout": 10000
+  }
+}
+```
+
+### Conversation Mode
+
+For LLM-driven multi-step evaluations:
+
+```json
+{
+  "id": "conversation-test",
+  "name": "Dataset Exploration Conversation",
+  "description": "Tests exploring datasets with multiple steps",
+  "prompt": "Explore datasets and find latency-related columns",
+  "conversationMode": true,
+  "maxSteps": 4,
+  "validation": {
+    "prompt": "Validate the exploration was logical and found relevant columns"
+  },
+  "options": {
+    "timeout": 30000
+  }
+}
+```
+
 ## Running Evaluations
 
 1. Install dependencies:
@@ -75,6 +143,12 @@ Each evaluation prompt is defined as a JSON file with the following structure:
    ```
    pnpm run eval
    ```
+   
+   Specific provider options:
+   ```
+   pnpm run eval:openai    # Use OpenAI models
+   pnpm run eval:anthropic # Use Anthropic models
+   ```
 
 5. Generate a report from an existing summary:
    ```
@@ -94,6 +168,23 @@ The framework can be configured using the following environment variables:
 ### MCP Server Configuration
 - `MCP_SERVER_COMMAND` - Command to start the MCP server as a child process (e.g. `node build/index.mjs`)
 - `MCP_SERVER_URL` - URL for connecting to a running MCP server via HTTP (overrides command if both are set)
+
+## Testing Strategies
+
+### Single Tool Tests
+Best for validating individual tool functionality and ensuring each tool works correctly in isolation. Use this for basic functionality testing of each tool.
+
+### Multi-Step Tests
+Useful for validating common workflows that involve multiple tools in sequence. Examples include:
+- Getting dataset info then running a query
+- Analyzing columns before creating a visualization
+- Testing related operations that build on each other
+
+### Conversation Mode Tests
+Ideal for testing more complex and exploratory scenarios where the path isn't predetermined. This helps evaluate:
+- Tool discovery and exploration capabilities
+- Ability to handle errors and adjust strategy
+- Efficiency in completing tasks (number of steps taken)
 
 ## Extending the Framework
 
@@ -123,9 +214,9 @@ class MyProvider implements LLMProvider {
 
 Create new JSON files in the `prompts` directory following the schema above. Each prompt should:
 
-1. Target a specific MCP tool
-2. Provide test parameters
-3. Include clear validation criteria
+1. Target either a specific tool or define multiple steps
+2. Provide clear parameters for each step
+3. Include validation criteria appropriate to the test type
 4. Have a unique ID and descriptive name
 
 ## GitHub Actions Integration
@@ -134,7 +225,7 @@ The repository includes a GitHub Actions workflow that:
 
 1. Builds the MCP server
 2. Runs all evaluations against the built server
-3. Generates an HTML report
+3. Generates an HTML report with metrics
 4. Uploads results as workflow artifacts
 5. Posts a summary comment to the PR (if running on a PR)
 
@@ -149,5 +240,6 @@ pnpm tsx eval/scripts/run-eval.ts run
 
 - **Missing API Keys**: Ensure you've set the `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` environment variables.
 - **MCP Server Not Starting**: Check the server command in `MCP_SERVER_COMMAND` and verify paths are correct.
-- **Tool Not Found**: Ensure the tool name in the prompt file matches a tool exposed by the MCP server.
+- **Tool Not Found**: Ensure the tool names in prompts match tools exposed by the MCP server.
 - **High Failure Rate**: Review validation criteria to ensure they're reasonable and match expected outputs.
+- **Conversation Mode Issues**: If conversation mode tests fail, check the prompt clarity and ensure the `maxSteps` value is appropriate.

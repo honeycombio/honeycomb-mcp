@@ -1,13 +1,29 @@
 import { z } from 'zod';
 
-// Schema for test prompts
+// Schema for a single tool step in a multi-step scenario
+export const ToolStepSchema = z.object({
+  tool: z.string(),
+  parameters: z.record(z.any()),
+  description: z.string().optional(),
+});
+
+export type ToolStep = z.infer<typeof ToolStepSchema>;
+
+// Schema for test prompts - supporting both single and multi-step scenarios
 export const EvalPromptSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  tool: z.string(),
+  // For single tool execution, use these properties
+  tool: z.string().optional(),
   prompt: z.string(),
-  parameters: z.record(z.any()),
+  parameters: z.record(z.any()).optional(),
+  // For multi-step tool executions, use this property
+  steps: z.array(ToolStepSchema).optional(),
+  // Flag to enable conversation mode (multiple back-and-forth steps)
+  conversationMode: z.boolean().optional(),
+  // Maximum number of tool calls allowed in conversation mode
+  maxSteps: z.number().optional(),
   validation: z.object({
     prompt: z.string(),
     expectedOutcome: z.object({
@@ -22,6 +38,17 @@ export const EvalPromptSchema = z.object({
 
 export type EvalPrompt = z.infer<typeof EvalPromptSchema>;
 
+// Record of a single tool call
+export const ToolCallRecordSchema = z.object({
+  tool: z.string(),
+  parameters: z.record(z.any()),
+  response: z.any(),
+  timestamp: z.string(),
+  latencyMs: z.number(),
+});
+
+export type ToolCallRecord = z.infer<typeof ToolCallRecordSchema>;
+
 // Schema for evaluation metrics
 export const MetricsSchema = z.object({
   startTime: z.number(),
@@ -32,6 +59,8 @@ export const MetricsSchema = z.object({
     completion: z.number().optional(),
     total: z.number().optional(),
   }).optional(),
+  toolCallCount: z.number().optional(), // Number of tool calls made
+  stepCount: z.number().optional(),     // Number of conversation steps
 });
 
 export type Metrics = z.infer<typeof MetricsSchema>;
@@ -41,7 +70,10 @@ export const EvalResultSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   prompt: EvalPromptSchema,
-  toolResponse: z.any(),
+  // For single tool calls
+  toolResponse: z.any().optional(),
+  // For multi-step scenarios or conversation mode
+  toolCalls: z.array(ToolCallRecordSchema).optional(),
   validation: z.object({
     passed: z.boolean(),
     score: z.number().optional(), // 0-1 score
@@ -62,6 +94,7 @@ export const EvalSummarySchema = z.object({
   failed: z.number(),
   successRate: z.number(), // 0-1
   averageLatency: z.number(),
+  averageToolCalls: z.number().optional(), // Average tool calls across all tests
   results: z.array(EvalResultSchema),
   metadata: z.record(z.any()).optional(),
 });
