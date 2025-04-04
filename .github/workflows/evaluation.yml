@@ -1,11 +1,12 @@
 name: Run Evaluations
 
-# Run this workflow after all tests have passed (for both main and PR)
+# Run this workflow after all tests have completed (for both main and PR)
 on:
   workflow_run:
     workflows: ["Tests"]
     types:
       - completed
+    branches-ignore: []  # Remove branch restrictions to run on all branches
   workflow_dispatch:
 
 jobs:
@@ -19,6 +20,18 @@ jobs:
       pull-requests: write
       
     steps:
+      # Debug workflow_run event
+      - name: Debug workflow_run event
+        if: github.event_name == 'workflow_run'
+        run: |
+          echo "Workflow run event detected!"
+          echo "Workflow name: ${{ github.event.workflow_run.name }}"
+          echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Head branch: ${{ github.event.workflow_run.head_branch }}"
+          echo "Repository: ${{ github.event.workflow_run.head_repository.full_name }}"
+          echo "Event trigger: ${{ github.event.workflow_run.event }}"
+          echo "PR info: ${{ toJson(github.event.workflow_run.pull_requests) }}"
+      
       # Special checkout for workflow_run events
       - name: Checkout PR code (for workflow_run)
         if: github.event_name == 'workflow_run'
