@@ -1,27 +1,36 @@
 name: Run Evaluations
 
-# Only run this workflow after tests have passed
-# Only trigger on main branch pushes and manual workflow_dispatch
+# Run this workflow after all tests have passed (for both main and PR)
 on:
   workflow_run:
     workflows: ["Tests"]
     types:
       - completed
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
   evaluate:
-    # When using workflow_run, only run if the tests workflow succeeded
+    # Only run if the tests workflow succeeded
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    # Set proper permissions to handle both PR and main branch workflows
     permissions:
       contents: read
       pull-requests: write
       
     steps:
-      - uses: actions/checkout@v4
+      # Special checkout for workflow_run events
+      - name: Checkout PR code (for workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          
+      # Standard checkout for other events
+      - name: Checkout code (for workflow_dispatch)
+        if: github.event_name != 'workflow_run'
+        uses: actions/checkout@v4
       
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -59,8 +68,37 @@ jobs:
           LATEST_REPORT=$(ls -t eval/reports/*.html | head -1)
           echo "latest_report=$LATEST_REPORT" >> $GITHUB_OUTPUT
           
-      - name: Post report summary to PR step
-        if: github.event_name == 'pull_request'
+      - name: Post report summary for PR
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+        run: |
+          # Get PR number from workflow run
+          PR_NUMBER=$(echo "${{ github.event.workflow_run.pull_requests[0].number }}")
+          
+          echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
+          echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Latest report: $(basename ${{ steps.find-report.outputs.latest_report }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
+          
+          # Add PR comment
+          if [ ! -z "$PR_NUMBER" ]; then
+            # Format comment
+            PR_COMMENT="## Honeycomb MCP Evaluation Results\n\n"
+            PR_COMMENT+="✅ Evaluations completed successfully\n\n"
+            PR_COMMENT+="Download the full report from the workflow artifacts: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            
+            echo -e "$PR_COMMENT" > pr_comment.txt
+            
+            # Post comment to PR
+            gh pr comment $PR_NUMBER --body-file pr_comment.txt
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          
+      - name: Post report summary for direct run
+        if: github.event_name != 'workflow_run'
         run: |
           echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
           echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
