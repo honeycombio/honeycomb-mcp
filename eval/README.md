@@ -62,7 +62,7 @@ The original mode for evaluating a single tool call:
 
 ### Multi-Step Mode
 
-For evaluating a pre-defined sequence of tool calls:
+For evaluating a pre-defined sequence of tool calls with support for parameter expansion:
 
 ```json
 {
@@ -84,10 +84,12 @@ For evaluating a pre-defined sequence of tool calls:
       "parameters": {
         "environment": "production",
         "dataset": "api",
-        "calculations": [{"op": "COUNT"}],
+        "calculations": [
+          {"op": "AVG", "column": "${{step:0.columns[2].key}}"}
+        ],
         "time_range": 60
       },
-      "description": "Run query"
+      "description": "Run query using columns from previous step"
     }
   ],
   "validation": {
@@ -97,6 +99,33 @@ For evaluating a pre-defined sequence of tool calls:
     "timeout": 10000
   }
 }
+```
+
+#### Parameter Expansion Syntax
+
+Multi-step mode supports using results from previous steps through parameter expansion with this syntax:
+
+```
+${{step:INDEX.PATH.TO.VALUE}}
+${{step:INDEX.PATH.TO.VALUE||FALLBACK}}
+```
+
+Where:
+- `INDEX` is the zero-based index of the previous step
+- `PATH.TO.VALUE` is a dot-notation path to access nested properties
+- Array notation is also supported: `columns[0].name`
+- `FALLBACK` (optional) is a fallback value to use if the path doesn't exist
+
+Examples:
+- `${{step:0.columns[2].key}}` - Reference the key from the 3rd column returned in step 0
+- `${{step:1.results.summary.totalCount}}` - Reference totalCount from step 1's results
+- `${{step:0.environments[0]}}` - Reference the first environment from step 0
+- `${{step:0.columns[0].key||duration_ms}}` - Use the first column's key, or fall back to "duration_ms" if not found
+
+The parameter expansion system includes intelligent fallbacks for common Honeycomb data types. If a referenced path isn't found and no fallback is provided, it will:
+1. Try to find an appropriate column based on context (e.g., duration related columns for metrics)
+2. Fall back to common field names if needed (duration_ms, name, etc.)
+3. Use the first available column if nothing else works
 ```
 
 ### Conversation Mode

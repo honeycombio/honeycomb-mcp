@@ -20,35 +20,43 @@
         "calculations": [
           {
             "op": "AVG",
-            "column": "duration_ms"
+            "column": "${{step:0.columns[0].key}}"
           },
           {
             "op": "P95",
-            "column": "duration_ms"
+            "column": "${{step:0.columns[0].key}}"
           }
         ],
-        "breakdowns": ["name"],
+        "filters": [
+          {
+            "column": "${{step:0.columns[1].key}}",
+            "op": "exists"
+          }
+        ],
+        "breakdowns": [
+          "${{step:0.columns[1].key}}"
+        ],
         "time_range": 3600,
         "orders": [
           {
             "op": "P95",
-            "column": "duration_ms",
+            "column": "${{step:0.columns[0].key}}",
             "order": "descending"
           }
         ],
         "limit": 5
       },
-      "description": "Run a targeted query analyzing latency metrics broken down by operation name"
+      "description": "Run a targeted query analyzing latency metrics using columns discovered in the first step"
     }
   ],
   "validation": {
-    "prompt": "Evaluate whether both tool calls were successful and demonstrate a logical workflow. The first response should return column definitions for the 'frontend' dataset that includes timing/latency columns like 'duration_ms'. The second call should run a meaningful query specifically using those timing columns (e.g., calculating AVG and P95 of duration_ms), demonstrating that information from the first call informed the second call. Both responses should be error-free and contain the expected data.",
+    "prompt": "Evaluate whether both tool calls were successful and demonstrate a logical workflow. The first response should return column definitions for the 'frontend' dataset that includes various column types. The second call should run a meaningful query specifically using column(s) discovered in the first call, demonstrating that information from the first call informed the second call. Both responses should be error-free and contain the expected data.",
     "expectedOutcome": {
       "success": true,
       "criteria": [
-        "First call returns column definitions for the frontend dataset that include latency/timing columns",
+        "First call returns column definitions for the frontend dataset",
         "Second call uses specific columns discovered in the first call for meaningful analysis",
-        "The second call demonstrates a real-world analytical pattern (calculating percentiles by operation name)",
+        "The second call demonstrates a real-world analytical pattern (calculating metrics with breakdowns by attribute)",
         "Both calls execute successfully without errors",
         "The workflow demonstrates using information from the first step to inform the second step"
       ]

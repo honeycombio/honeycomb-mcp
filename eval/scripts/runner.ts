@@ -307,7 +307,8 @@ REASONING: [your detailed explanation]
   }
   
   /**
-   * Run a pre-defined sequence of tool calls
+   * Run a pre-defined sequence of tool calls with parameter expansion
+   * Supports using results from previous steps in subsequent calls via variable expansion
    */
   private async runMultiStepMode(steps: any[]): Promise<any[]> {
     if (!this.client) {
@@ -315,22 +316,32 @@ REASONING: [your detailed explanation]
     }
     
     const toolCalls = [];
+    const stepResults: Record<number, any> = {}; // Store results by step index for reference
     
-    for (const step of steps) {
-      console.log(`Calling tool ${step.tool} with params`, step.parameters);
+    for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
+      const step = steps[stepIndex];
+      
+      // Expand parameters using previous step results
+      console.log(`Step ${stepIndex}: Original parameters before expansion:`, JSON.stringify(step.parameters));
+      const expandedParameters = this.expandStepParameters(step.parameters, stepResults);
+      
+      console.log(`Step ${stepIndex}: Calling tool ${step.tool} with expanded params:`, JSON.stringify(expandedParameters));
       const callStartTime = Date.now();
       
       try {
         const response = await this.client.callTool({
           name: step.tool,
-          arguments: step.parameters
+          arguments: expandedParameters
         });
         
         const callEndTime = Date.now();
         
+        // Store the result for potential use in later steps
+        stepResults[stepIndex] = response;
+        
         toolCalls.push({
           tool: step.tool,
-          parameters: step.parameters,
+          parameters: expandedParameters,
           response,
           timestamp: new Date(callStartTime).toISOString(),
           latencyMs: callEndTime - callStartTime
@@ -339,7 +350,7 @@ REASONING: [your detailed explanation]
         // Record the error but continue with next steps
         toolCalls.push({
           tool: step.tool,
-          parameters: step.parameters,
+          parameters: expandedParameters,
           response: { error: error.message },
           timestamp: new Date(callStartTime).toISOString(),
           latencyMs: Date.now() - callStartTime
@@ -348,6 +359,115 @@ REASONING: [your detailed explanation]
     }
     
     return toolCalls;
+  }
+  
+  /**
+   * Expand parameter values using previous step results
+   * Supports referencing previous results with patterns like ${{step:0.path.to.value}}
+   * Also supports fallbacks with ${{step:0.path.to.value||fallback}}
+   */
+  private expandStepParameters(parameters: any, stepResults: Record<number, any>): any {
+    if (!parameters) return parameters;
+    
+    const expandString = (value: string): string => {
+      // Match patterns like ${{step:0.columns[0].name}} or ${{step:0.columns[0].name||fallback}}
+      return value.replace(/\$\{\{step:(\d+)\.([^}|]+)(?:\|\|([^}]+))?\}\}/g, (match, stepNum, path, fallback) => {
+        const stepIndex = parseInt(stepNum, 10);
+        if (!stepResults[stepIndex]) {
+          console.warn(`Warning: Reference to step ${stepIndex} result but step either failed or doesn't exist`);
+          return fallback || 'duration_ms'; // Use fallback or a sensible default
+        }
+        
+        try {
+          // Parse the path expression and extract the value
+          const value = this.getValueByPath(stepResults[stepIndex], path);
+          if (value === undefined || value === null) {
+            console.warn(`Warning: Path ${path} in step ${stepIndex} result returned null/undefined.`);
+            console.log(`Available properties at step ${stepIndex}:`, Object.keys(stepResults[stepIndex]).join(', '));
+            
+            // Use fallback value if provided, or try some sensible defaults based on context
+            if (fallback) {
+              return fallback;
+            }
+            
+            // Try to determine a reasonable default based on the parameter context
+            if (path.includes('column') || path.endsWith('.key')) {
+              if (path.includes('duration') || match.includes('duration')) {
+                return 'duration_ms';
+              } else if (path.includes('name') || match.includes('name')) {
+                return 'name';
+              } else {
+                // Check if we can find any duration-related columns
+                const columnsData = stepResults[stepIndex].columns;
+                if (Array.isArray(columnsData)) {
+                  const durationColumn = columnsData.find(col => 
+                    col.key?.includes('duration') || col.description?.includes('duration')
+                  );
+                  if (durationColumn) {
+                    console.log(`Found fallback duration column: ${durationColumn.key}`);
+                    return durationColumn.key;
+                  }
+                  
+                  // If no duration column, use the first column
+                  if (columnsData.length > 0 && columnsData[0].key) {
+                    console.log(`Using first available column as fallback: ${columnsData[0].key}`);
+                    return columnsData[0].key;
+                  }
+                }
+              }
+            }
+            
+            return 'duration_ms'; // Final fallback
+          }
+          
+          return String(value); // Force conversion to string to ensure it works in string templates
+        } catch (e) {
+          console.warn(`Warning: Failed to extract path ${path} from step ${stepIndex} result:`, e);
+          console.log(`Result structure for step ${stepIndex}:`, JSON.stringify(stepResults[stepIndex]).substring(0, 200) + '...');
+          
+          // Use fallback or default
+          return fallback || 'duration_ms';
+        }
+      });
+    };
+    
+    // Recursively process all parameter values
+    const expandValue = (value: any): any => {
+      if (typeof value === 'string') {
+        return expandString(value);
+      } else if (Array.isArray(value)) {
+        return value.map(item => expandValue(item));
+      } else if (value !== null && typeof value === 'object') {
+        const result: Record<string, any> = {};
+        for (const [k, v] of Object.entries(value)) {
+          result[k] = expandValue(v);
+        }
+        return result;
+      }
+      return value;
+    };
+    
+    return expandValue(parameters);
+  }
+  
+  /**
+   * Extract a value from an object using a path expression
+   * Supports dot notation (user.name) and array access (items[0].name)
+   */
+  private getValueByPath(obj: any, path: string): any {
+    // Handle array indexing patterns like columns[0].name
+    const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
+    const parts = normalizedPath.split('.');
+    
+    let current = obj;
+    for (const part of parts) {
+      if (current === null || current === undefined) {
+        return undefined;
+      }
+      current = current[part];
+    }
+    
+    return current;
   }
   
   /**
