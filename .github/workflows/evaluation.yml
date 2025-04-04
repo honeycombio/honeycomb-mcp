@@ -62,9 +62,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
       
-      # Always upload reports as artifacts
+      # Always upload reports as artifacts (using v4)
       - name: Upload reports artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: evaluation-reports
           path: eval/reports/
@@ -84,7 +84,7 @@ jobs:
       
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: evaluation-reports
           path: reports
