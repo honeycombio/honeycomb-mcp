@@ -15,9 +15,6 @@ jobs:
       contents: read
       pull-requests: write
       
-    # Only deploy to GitHub Pages from the main branch
-    # For other branches, we'll just generate reports without deployment
-      
     steps:
       - uses: actions/checkout@v4
       
@@ -57,8 +54,6 @@ jobs:
       - name: Post report summary to PR step
         if: github.event_name == 'pull_request'
         run: |
-          cat eval/results/all-results-*.json
-          
           echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
           echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -67,18 +62,41 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The full report is available as a workflow artifact." >> $GITHUB_STEP_SUMMARY
       
-      # Upload artifact for access after workflow completion
+      # Always upload reports as artifacts
       - name: Upload reports artifact
         uses: actions/upload-artifact@v3
         with:
           name: evaluation-reports
           path: eval/reports/
           retention-days: 30
+          
+  # Separate job for GitHub Pages deployment (only runs on main branch)
+  deploy:
+    needs: evaluate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
       
-      # Conditional deployment to GitHub Pages (only from main branch)
-      - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        uses: JamesIves/github-pages-deploy-action@v4
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
         with:
-          folder: eval/reports
-          target-folder: reports
+          name: evaluation-reports
+          path: reports
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
