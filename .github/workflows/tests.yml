@@ -94,10 +94,21 @@ jobs:
         EVAL_CONCURRENCY: 2
         MCP_SERVER_COMMAND: "node build/index.mjs"
     
+    - name: Ensure reports directory exists
+      run: mkdir -p eval/reports
+      
+    - name: Create index file if no reports are generated
+      run: |
+        # Check if any HTML reports exist
+        if [ -z "$(find eval/reports -name '*.html' 2>/dev/null)" ]; then
+          echo "No reports were generated, creating a placeholder"
+          echo "<html><body><h1>No evaluation reports generated</h1><p>This could be due to missing API keys or configuration.</p></body></html>" > eval/reports/no-reports.html
+        fi
+        
     - name: Find latest report
       id: find-report
       run: |
-        LATEST_REPORT=$(ls -t eval/reports/*.html | head -1 || echo "")
+        LATEST_REPORT=$(ls -t eval/reports/*.html 2>/dev/null | head -1 || echo "eval/reports/no-reports.html")
         echo "latest_report=$LATEST_REPORT" >> $GITHUB_OUTPUT
     
     - name: Post report summary
@@ -122,6 +133,44 @@ jobs:
         fi
       env:
         GH_TOKEN: ${{ github.token }}
+    
+    # Create report index if it doesn't exist
+    - name: Generate report index if needed
+      run: |
+        if [ ! -f "eval/reports/index.html" ]; then
+          echo "Generating index.html for reports"
+          cat > eval/reports/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Honeycomb MCP Evaluation Reports</title>
+            <style>
+              body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+              .container { max-width: 800px; margin: 0 auto; }
+              h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
+              ul { list-style-type: none; padding: 0; }
+              li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }
+              a { color: #0066cc; text-decoration: none; }
+              a:hover { text-decoration: underline; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Honeycomb MCP Evaluation Reports</h1>
+              <p>Select a report to view:</p>
+              <ul>
+                $(for file in $(find eval/reports -name "*.html" -not -name "index.html" | sort -r); do
+                  filename=$(basename $file)
+                  echo "<li><a href=\"$filename\">$filename</a></li>"
+                done)
+              </ul>
+            </div>
+          </body>
+          </html>
+          EOF
+        fi
     
     # Upload evaluation reports as artifacts
     - name: Upload evaluation reports
