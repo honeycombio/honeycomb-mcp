@@ -48,3 +48,29 @@ jobs:
       
     - name: Build
       run: pnpm build
+      
+    # Run evaluations only on PRs after tests pass
+    - name: Run evaluations for pull requests
+      if: github.event_name == 'pull_request' && success()
+      run: |
+        # Set up environment for evals
+        echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
+        
+        # Run the evaluations
+        pnpm run eval
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        # Use only limited models for CI to save costs
+        EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
+        EVAL_CONCURRENCY: 2
+        MCP_SERVER_COMMAND: "node build/index.mjs"
+        
+    # Upload evaluation reports as artifacts for PRs
+    - name: Upload evaluation reports for pull requests
+      if: github.event_name == 'pull_request' && success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: evaluation-reports
+        path: eval/reports/
+        retention-days: 30

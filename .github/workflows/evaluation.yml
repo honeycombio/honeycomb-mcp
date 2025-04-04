@@ -1,7 +1,7 @@
 name: Run Evaluations
 
 # Only run this workflow after tests have passed
-# Use workflow_run to depend on 'Tests' workflow
+# Only trigger on main branch pushes and manual workflow_dispatch
 on:
   workflow_run:
     workflows: ["Tests"]
@@ -9,8 +9,6 @@ on:
       - completed
     branches:
       - main
-  pull_request:
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 jobs:
