@@ -39,7 +39,7 @@ jobs:
         
     - name: Create MCP config
       run: |
-        echo '${{ secrets.MCP_CONFIG }}' > .mcp-config.json
+        echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
         echo "Created MCP config file"
         
     - name: Run evaluations
@@ -48,7 +48,7 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        MCP_SERVER_COMMAND: "node build/index.mjs --config .mcp-config.json"
+        MCP_SERVER_COMMAND: "node build/index.mjs"
         MCP_SERVER_URL: ${{ inputs.server_url || '' }}  # URL overrides command if provided
         EVAL_MODELS: ${{ inputs.models }}
         EVAL_CONCURRENCY: "2"
