@@ -119,6 +119,9 @@ class AnthropicProvider implements LLMProvider {
 }
 
 async function generateReportIndex(reportsDir: string): Promise<void> {
+  // Ensure reports directory exists
+  await fs.mkdir(reportsDir, { recursive: true });
+  
   // Get all report files
   const files = await fs.readdir(reportsDir);
   const reportFiles = files.filter(file => file.startsWith('report-') && file.endsWith('.html'));
