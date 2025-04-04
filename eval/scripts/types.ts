@@ -22,7 +22,15 @@ export const EvalPromptSchema = z.object({
   steps: z.array(ToolStepSchema).optional(),
   // Flag to enable conversation mode (multiple back-and-forth steps)
   conversationMode: z.boolean().optional(),
-  // Maximum number of tool calls allowed in conversation mode
+  // Flag to enable agent mode (goal-directed analysis with structured thinking)
+  agentMode: z.boolean().optional(),
+  // Specific analysis goal for agent mode
+  goal: z.string().optional(),
+  // Additional context or background for agent mode
+  initialContext: z.string().optional(),
+  // Expected tools the agent should use (for validation)
+  expectedTools: z.array(z.string()).optional(),
+  // Maximum number of tool calls allowed in conversation or agent mode
   maxSteps: z.number().optional(),
   validation: z.object({
     prompt: z.string(),
@@ -38,6 +46,18 @@ export const EvalPromptSchema = z.object({
 
 export type EvalPrompt = z.infer<typeof EvalPromptSchema>;
 
+// Schema for agent thought process
+export const AgentThoughtSchema = z.object({
+  thought: z.string().optional(),
+  plan: z.string().optional(), 
+  reasoning: z.string().optional(),
+  step: z.number().optional(),
+  complete: z.boolean().optional(),
+  summary: z.string().optional(),
+});
+
+export type AgentThought = z.infer<typeof AgentThoughtSchema>;
+
 // Record of a single tool call
 export const ToolCallRecordSchema = z.object({
   tool: z.string(),
@@ -45,6 +65,13 @@ export const ToolCallRecordSchema = z.object({
   response: z.any(),
   timestamp: z.string(),
   latencyMs: z.number(),
+  // For agent mode: thought process fields
+  thought: z.string().optional(),
+  plan: z.string().optional(),
+  reasoning: z.string().optional(),
+  step: z.number().optional(),
+  complete: z.boolean().optional(),
+  summary: z.string().optional(),
 });
 
 export type ToolCallRecord = z.infer<typeof ToolCallRecordSchema>;
@@ -58,9 +85,20 @@ export const MetricsSchema = z.object({
     prompt: z.number().optional(),
     completion: z.number().optional(),
     total: z.number().optional(),
+    // Track tool-related tokens separately from validation tokens
+    toolPrompt: z.number().optional(),    // Tokens used to determine and format tool usage
+    toolCompletion: z.number().optional(), // Tokens used to process tool responses
+    toolTotal: z.number().optional(),     // Total tokens related to actual tool usage
   }).optional(),
   toolCallCount: z.number().optional(), // Number of tool calls made
   stepCount: z.number().optional(),     // Number of conversation steps
+  // Agent-specific metrics
+  agentMetrics: z.object({
+    goalAchievement: z.number().optional(),  // 0-1 score on goal completion
+    reasoningQuality: z.number().optional(), // 0-1 score on reasoning quality
+    pathEfficiency: z.number().optional(),   // 0-1 score on path efficiency
+    overallScore: z.number().optional(),     // 0-1 overall agent performance
+  }).optional(),
 });
 
 export type Metrics = z.infer<typeof MetricsSchema>;
@@ -78,6 +116,12 @@ export const EvalResultSchema = z.object({
     passed: z.boolean(),
     score: z.number().optional(), // 0-1 score
     reasoning: z.string(),
+    // Agent-specific validation scores
+    agentScores: z.object({
+      goalAchievement: z.number().optional(),  // 0-1 score on goal completion
+      reasoningQuality: z.number().optional(), // 0-1 score on reasoning quality 
+      pathEfficiency: z.number().optional(),   // 0-1 score on path efficiency
+    }).optional(),
   }),
   metrics: MetricsSchema,
   provider: z.string(), // The LLM provider used
@@ -95,6 +139,7 @@ export const EvalSummarySchema = z.object({
   successRate: z.number(), // 0-1
   averageLatency: z.number(),
   averageToolCalls: z.number().optional(), // Average tool calls across all tests
+  averageToolTokens: z.number().optional(), // Average tokens used specifically for tool operations
   results: z.array(EvalResultSchema),
   metadata: z.record(z.any()).optional(),
 });
@@ -105,6 +150,20 @@ export type EvalSummary = z.infer<typeof EvalSummarySchema>;
 export interface LLMProvider {
   name: string;
   models: string[];
+  
+  // Context setting to differentiate between validation and tool calls
+  setToolCallContext?: (isToolCall: boolean) => void;
+  
+  // Run a prompt with the LLM
   runPrompt: (prompt: string, model: string) => Promise<string>;
-  getTokenUsage: () => { prompt: number; completion: number; total: number };
+  
+  // Get token usage statistics
+  getTokenUsage: () => { 
+    prompt: number; 
+    completion: number; 
+    total: number; 
+    toolPrompt?: number; 
+    toolCompletion?: number; 
+    toolTotal?: number;
+  };
 }

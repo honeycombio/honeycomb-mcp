@@ -1,0 +1,27 @@
+{
+  "id": "agent-performance-analysis",
+  "name": "Service Performance Analysis",
+  "description": "Tests agent's ability to analyze service performance in the Honeycomb environment",
+  "agentMode": true,
+  "goal": "Analyze the ms-demo environment to identify the service with the highest latency and determine potential causes of performance issues",
+  "initialContext": "Our microservices architecture has been experiencing intermittent performance problems. We need to identify which service is the slowest and analyze potential patterns to understand why.",
+  "prompt": "I want you to analyze service performance in the 'ms-demo' environment. Your goal is to identify which service has the highest latency and analyze potential causes of performance issues.",
+  "maxSteps": 10,
+  "expectedTools": ["list_datasets", "get_columns", "run_query", "analyze_column"],
+  "validation": {
+    "prompt": "Evaluate whether the agent successfully identified the slowest service and provided meaningful analysis of performance patterns. The agent should follow a logical progression of discovery: listing datasets, exploring relevant columns, running appropriate queries to compare performance metrics, and analyzing specific dimensions that correlate with high latency.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Identified the slowest service with supporting data",
+        "Analyzed performance patterns across relevant dimensions (endpoints, time periods, etc.)",
+        "Used appropriate metrics (p95/p99 latency, error rates, etc.)",
+        "Followed a logical progression that built on previous steps",
+        "Provided actionable insights about potential performance bottlenecks"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 60000
+  }
+}

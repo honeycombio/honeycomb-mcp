@@ -113,6 +113,8 @@ jobs:
         # Use only limited models for CI to save costs
         EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
         EVAL_CONCURRENCY: 2
+        EVAL_JUDGE_PROVIDER: "anthropic"
+        EVAL_JUDGE_MODEL: "claude-3-5-haiku-latest"
         MCP_SERVER_COMMAND: "node build/index.mjs"
         
     # Mark step as failed if evaluations didn't run successfully
@@ -187,40 +189,8 @@ jobs:
     - name: Generate report index if needed
       run: |
         if [ ! -f "eval/reports/index.html" ]; then
-          echo "Generating index.html for reports"
-          
-          echo '<!DOCTYPE html>' > eval/reports/index.html
-          echo '<html>' >> eval/reports/index.html
-          echo '<head>' >> eval/reports/index.html
-          echo '  <meta charset="UTF-8">' >> eval/reports/index.html
-          echo '  <meta name="viewport" content="width=device-width, initial-scale=1.0">' >> eval/reports/index.html
-          echo '  <title>Honeycomb MCP Evaluation Reports</title>' >> eval/reports/index.html
-          echo '  <style>' >> eval/reports/index.html
-          echo '    body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }' >> eval/reports/index.html
-          echo '    .container { max-width: 800px; margin: 0 auto; }' >> eval/reports/index.html
-          echo '    h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }' >> eval/reports/index.html
-          echo '    ul { list-style-type: none; padding: 0; }' >> eval/reports/index.html
-          echo '    li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }' >> eval/reports/index.html
-          echo '    a { color: #0066cc; text-decoration: none; }' >> eval/reports/index.html
-          echo '    a:hover { text-decoration: underline; }' >> eval/reports/index.html
-          echo '  </style>' >> eval/reports/index.html
-          echo '</head>' >> eval/reports/index.html
-          echo '<body>' >> eval/reports/index.html
-          echo '  <div class="container">' >> eval/reports/index.html
-          echo '    <h1>Honeycomb MCP Evaluation Reports</h1>' >> eval/reports/index.html
-          echo '    <p>Select a report to view:</p>' >> eval/reports/index.html
-          echo '    <ul>' >> eval/reports/index.html
-          
-          # Add list items for each report file
-          for file in $(find eval/reports -name "*.html" -not -name "index.html" | sort -r); do
-            filename=$(basename $file)
-            echo "      <li><a href=\"$filename\">$filename</a></li>" >> eval/reports/index.html
-          done
-          
-          echo '    </ul>' >> eval/reports/index.html
-          echo '  </div>' >> eval/reports/index.html
-          echo '</body>' >> eval/reports/index.html
-          echo '</html>' >> eval/reports/index.html
+          echo "Generating index.html for reports using the update-index script"
+          pnpm run eval:update-index
         fi
     
     # Upload evaluation reports as artifacts

@@ -19,11 +19,12 @@
     "eval:report": "npx tsx eval/scripts/run-eval.ts report",
     "eval:update-index": "npx tsx eval/scripts/run-eval.ts update-index",
     "eval:all": "pnpm run build && pnpm run eval",
-    "eval:openai": "EVAL_MODELS='{\"openai\":\"gpt-4o\"}' pnpm run eval",
-    "eval:anthropic": "EVAL_MODELS='{\"anthropic\":[\"claude-3-5-haiku-latest\",\"claude-3-7-sonnet-latest\"]}' pnpm run eval",
-    "eval:anthropic:haiku": "EVAL_MODELS='{\"anthropic\":\"claude-3-5-haiku-latest\"}' pnpm run eval",
-    "eval:anthropic:sonnet": "EVAL_MODELS='{\"anthropic\":\"claude-3-7-sonnet-latest\"}' pnpm run eval",
-    "eval:anthropic:opus": "EVAL_MODELS='{\"anthropic\":\"claude-3-opus-latest\"}' pnpm run eval"
+    "eval:openai": "EVAL_MODELS='{\"openai\":\"gpt-4o\"}' EVAL_JUDGE_PROVIDER=openai EVAL_JUDGE_MODEL=gpt-4o pnpm run eval",
+    "eval:anthropic": "EVAL_MODELS='{\"anthropic\":[\"claude-3-5-haiku-latest\",\"claude-3-7-sonnet-latest\"]}' EVAL_JUDGE_PROVIDER=anthropic EVAL_JUDGE_MODEL=claude-3-5-haiku-latest pnpm run eval",
+    "eval:anthropic:haiku": "EVAL_MODELS='{\"anthropic\":\"claude-3-5-haiku-latest\"}' EVAL_JUDGE_PROVIDER=anthropic EVAL_JUDGE_MODEL=claude-3-5-haiku-latest pnpm run eval",
+    "eval:anthropic:sonnet": "EVAL_MODELS='{\"anthropic\":\"claude-3-7-sonnet-latest\"}' EVAL_JUDGE_PROVIDER=anthropic EVAL_JUDGE_MODEL=claude-3-7-sonnet-latest pnpm run eval",
+    "eval:anthropic:opus": "EVAL_MODELS='{\"anthropic\":\"claude-3-opus-latest\"}' EVAL_JUDGE_PROVIDER=anthropic EVAL_JUDGE_MODEL=claude-3-opus-latest pnpm run eval",
+    "eval:cross-judge": "EVAL_MODELS='{\"anthropic\":\"claude-3-7-sonnet-latest\", \"openai\":\"gpt-4o\"}' EVAL_JUDGE_PROVIDER=anthropic EVAL_JUDGE_MODEL=claude-3-5-haiku-latest pnpm run eval"
   },
   "publishConfig": {
     "access": "public"
@@ -39,6 +40,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "dotenv": "^16.4.7",
+    "mustache": "^4.2.0",
     "openai": "^4.91.0",
     "zod": "^3.24.2"
   },

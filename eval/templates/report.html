@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honeycomb MCP Evaluation Report</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
+    h2 { color: #F5A623; margin-top: 30px; }
+    .summary { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .stat { text-align: center; }
+    .stat .value { font-size: 2em; font-weight: bold; margin: 10px 0; }
+    .stat .label { font-size: 0.9em; color: #666; }
+    .success { color: #28a745; }
+    .failure { color: #dc3545; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background-color: #f5f5f5; }
+    tr:hover { background-color: #f1f1f1; }
+    .result-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; border: 1px solid #eaeaea; }
+    .code { font-family: monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
+    .token-usage { margin-top: 10px; font-size: 0.9em; color: #666; }
+    .tool-calls { margin-top: 20px; }
+    .tool-call { margin-bottom: 15px; padding: 10px; border-left: 3px solid #F5A623; background: #fffbf4; }
+    .multi-step-label { background: #f0f8ff; border-radius: 3px; padding: 3px 6px; color: #0066cc; font-size: 0.8em; margin-left: 8px; }
+    .conversation-label { background: #f0fff0; border-radius: 3px; padding: 3px 6px; color: #008800; font-size: 0.8em; margin-left: 8px; }
+    .agent-label { background: #fce4ec; border-radius: 3px; padding: 3px 6px; color: #9c27b0; font-size: 0.8em; margin-left: 8px; }
+    .badge { display: inline-block; padding: 0.25em 0.4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: 0.25rem; }
+    .agent-thought { background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px; border-left: 3px solid #6c757d; }
+    .thought, .plan, .reasoning, .summary { margin-top: 5px; margin-bottom: 15px; }
+    .agent-step { border-left-color: #9c27b0; }
+    .task-complete { background: #e8f5e9; padding: 8px; margin-top: 10px; border-radius: 4px; color: #2e7d32; font-weight: bold; }
+    .metric-box { flex: 1; background: #f9f9f9; padding: 10px; border-radius: 4px; text-align: center; }
+    .metric-label { font-size: 0.9em; color: #555; }
+    .metric-value { font-size: 1.5em; font-weight: bold; margin-top: 5px; color: #9c27b0; }
+    .back-to-top { display: block; text-align: right; margin: 10px 0; font-size: 0.9em; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav { position: sticky; top: 0; background: #fff; padding: 10px 0; border-bottom: 1px solid #eee; margin-bottom: 20px; z-index: 100; }
+    nav a { margin-right: 15px; font-weight: bold; }
+    .page-section { scroll-margin-top: 60px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="#summary">Summary</a>
+      <a href="#results-table">Results Table</a>
+      <a href="#detailed-results">Detailed Results</a>
+    </nav>
+    
+    <h1>Honeycomb MCP Evaluation Report</h1>
+    <p>Generated on: {{timestamp}}</p>
+    
+    <div id="summary" class="summary page-section">
+      <h2>Summary</h2>
+      <div class="summary-grid">
+        <div class="stat">
+          <div class="label">Total Tests</div>
+          <div class="value">{{totalTests}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Passed</div>
+          <div class="value success">{{passed}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Failed</div>
+          <div class="value failure">{{failed}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Success Rate</div>
+          <div class="value">{{successRate}}%</div>
+        </div>
+        <div class="stat">
+          <div class="label">Avg Latency</div>
+          <div class="value">{{averageLatency}}ms</div>
+        </div>
+        <div class="stat">
+          <div class="label">Avg Tool Calls</div>
+          <div class="value">{{averageToolCalls}}</div>
+        </div>
+        <div class="stat">
+          <div class="label">Avg Tool Tokens</div>
+          <div class="value">{{averageToolTokens}}</div>
+        </div>
+      </div>
+      {{#judgeInfo}}
+      <div style="margin-top: 20px; font-style: italic; text-align: center;">
+        <p>Validation performed by: {{provider}} / {{model}}</p>
+      </div>
+      {{/judgeInfo}}
+    </div>
+    
+    <h2 id="results-table" class="page-section">Results by Test</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Test ID</th>
+          <th>Type</th>
+          <th>Provider / Model</th>
+          <th>Tool Calls</th>
+          <th>Status</th>
+          <th>Score</th>
+          <th>Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#results}}
+        <tr>
+          <td><a href="#test-{{id}}-{{provider}}-{{modelSafe}}">{{id}}</a></td>
+          <td>
+            {{#isAgent}}
+            <span class="badge agent-label">Agent</span>
+            {{/isAgent}}
+            {{#isConversation}}
+            <span class="badge conversation-label">Conversation</span>
+            {{/isConversation}}
+            {{#isMultiStep}}
+            <span class="badge multi-step-label">Multi-step</span>
+            {{/isMultiStep}}
+            {{#isSingle}}
+            <span class="badge">Single</span>
+            {{/isSingle}}
+          </td>
+          <td>{{provider}} / {{model}}</td>
+          <td>{{toolCallCount}}</td>
+          <td class="{{#passed}}success{{/passed}}{{^passed}}failure{{/passed}}">{{#passed}}PASS{{/passed}}{{^passed}}FAIL{{/passed}}</td>
+          <td>{{score}}</td>
+          <td>{{latency}}ms</td>
+        </tr>
+        {{/results}}
+      </tbody>
+    </table>
+    
+    <h2 id="detailed-results" class="page-section">Detailed Results</h2>
+    {{#results}}
+    <div id="test-{{id}}-{{provider}}-{{modelSafe}}" class="result-details">
+      <h3>{{id}} 
+        {{#isAgent}}
+        <span class="badge agent-label">Agent Mode</span>
+        {{/isAgent}}
+        {{#isConversation}}
+        <span class="badge conversation-label">Conversation Mode</span>
+        {{/isConversation}}
+        {{#isMultiStep}}
+        <span class="badge multi-step-label">Multi-step</span>
+        {{/isMultiStep}}
+      </h3>
+      <p><strong>Provider/Model:</strong> {{provider}}/{{model}}</p>
+      <p><strong>Status:</strong> <span class="{{#passed}}success{{/passed}}{{^passed}}failure{{/passed}}">{{#passed}}PASS{{/passed}}{{^passed}}FAIL{{/passed}}</span></p>
+      <p><strong>Score:</strong> {{score}}</p>
+      <p><strong>Validation Reasoning:</strong> {{reasoning}}</p>
+      <p><strong>Tool Calls:</strong> {{toolCallCount}}</p>
+      
+      {{#isAgent}}
+      <div class="agent-scores">
+        <h4>Agent Performance Metrics</h4>
+        <div style="display: flex; gap: 20px; margin-bottom: 10px;">
+          <div class="metric-box">
+            <div class="metric-label">Goal Achievement</div>
+            <div class="metric-value">{{goalAchievement}}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Reasoning Quality</div>
+            <div class="metric-value">{{reasoningQuality}}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Path Efficiency</div>
+            <div class="metric-value">{{pathEfficiency}}</div>
+          </div>
+        </div>
+      </div>
+      {{/isAgent}}
+      
+      {{#hasTokenUsage}}
+      <div class="token-usage">
+        <h4>Token Usage</h4>
+        <div style="display: flex; gap: 20px; margin-bottom: 10px;">
+          <div style="flex: 1;">
+            <strong>Total Tokens:</strong>
+            <ul>
+              <li>Prompt: {{promptTokens}}</li>
+              <li>Completion: {{completionTokens}}</li>
+              <li>Total: {{totalTokens}}</li>
+            </ul>
+          </div>
+          <div style="flex: 1;">
+            <strong>Tool-specific Tokens:</strong>
+            <ul>
+              <li>Tool Prompt: {{toolPromptTokens}}</li>
+              <li>Tool Completion: {{toolCompletionTokens}}</li>
+              <li>Tool Total: {{toolTotalTokens}}</li>
+            </ul>
+          </div>
+        </div>
+        <div style="font-size: 0.9em; color: #666;">
+          <em>Note: Tool-specific tokens measure only the tokens used for tool selection and processing, 
+          excluding tokens used for validation/judging.</em>
+        </div>
+      </div>
+      {{/hasTokenUsage}}
+      
+      {{#hasToolCalls}}
+      <details>
+        <summary>Tool Calls ({{toolCallsLength}})</summary>
+        <div class="tool-calls">
+          {{#toolCalls}}
+          <div class="tool-call {{#step}}agent-step{{/step}}">
+            <h4>{{#step}}Step {{step}}: {{/step}}{{^step}}Call {{index}}: {{/step}}{{tool}}</h4>
+            
+            {{#thought}}
+            <div class="agent-thought">
+              <p><strong>Thought Process:</strong></p>
+              <div class="thought">{{thought}}</div>
+              {{#plan}}<p><strong>Plan:</strong></p><div class="plan">{{plan}}</div>{{/plan}}
+              {{#reasoning}}<p><strong>Reasoning:</strong></p><div class="reasoning">{{reasoning}}</div>{{/reasoning}}
+              {{#summary}}<p><strong>Summary:</strong></p><div class="summary">{{summary}}</div>{{/summary}}
+            </div>
+            {{/thought}}
+            
+            <p><strong>Parameters:</strong></p>
+            <div class="code">{{parametersJson}}</div>
+            <p><strong>Response:</strong></p>
+            <div class="code">{{responseJson}}</div>
+            <p><small>Latency: {{callLatency}}ms</small></p>
+            
+            {{#complete}}
+            <div class="task-complete">✅ Task Completed</div>
+            {{/complete}}
+          </div>
+          {{/toolCalls}}
+        </div>
+      </details>
+      {{/hasToolCalls}}
+      {{^hasToolCalls}}
+      <details>
+        <summary>Tool Response</summary>
+        <div class="code">{{toolResponseJson}}</div>
+      </details>
+      {{/hasToolCalls}}
+      
+      <details>
+        <summary>Prompt Details</summary>
+        <div class="code">{{promptJson}}</div>
+      </details>
+      <a href="#results-table" class="back-to-top">Back to Results</a>
+    </div>
+    {{/results}}
+  </div>
+</body>
+</html>

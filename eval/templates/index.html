@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honeycomb MCP Evaluation Reports</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
+    ul { list-style-type: none; padding: 0; }
+    li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .date { color: #666; font-size: 0.9em; }
+    .latest { background: #fffbf4; border-left: 3px solid #F5A623; padding-left: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Honeycomb MCP Evaluation Reports</h1>
+    <p>Select a report to view detailed evaluation results:</p>
+    
+    <ul>
+      {{#reports}}
+      <li class="{{#isLatest}}latest{{/isLatest}}">
+        <a href="{{filename}}">{{#isLatest}}📊 Latest: {{/isLatest}}Report from {{dateStr}}</a>
+        {{#isLatest}}<small>(This is the most recent evaluation run)</small>{{/isLatest}}
+      </li>
+      {{/reports}}
+    </ul>
+  </div>
+</body>
+</html>

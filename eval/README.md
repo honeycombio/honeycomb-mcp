@@ -12,13 +12,15 @@ This evaluation framework provides a structured way to test and validate the Hon
    - **Multi-Step Mode**: Executes a pre-defined sequence of tool calls and evaluates the combined results
    - **Conversation Mode**: Uses an LLM to dynamically determine which tools to call in sequence, tracking a full conversation flow
 
-3. **Metrics Collection**: For each test, the framework captures:
+3. **Validation**: Test responses are validated using a configurable "judge" model, which can be separate from the model used for tool interactions. This allows for consistent validation across different provider tests.
+
+4. **Metrics Collection**: For each test, the framework captures:
    - Execution time and latency
    - Tool call counts
-   - Token usage
+   - Tool-specific token usage (separated from validation tokens)
    - Validation results
 
-4. **Reporting**: After all tests complete, a summary and detailed HTML report are generated with comprehensive metrics.
+5. **Reporting**: After all tests complete, a summary and detailed HTML report are generated with comprehensive metrics.
 
 ## Directory Structure
 
@@ -26,6 +28,7 @@ This evaluation framework provides a structured way to test and validate the Hon
 - `/scripts` - TypeScript implementation of the evaluation runner
 - `/results` - Evaluation results stored as JSON files
 - `/reports` - Generated HTML reports
+- `/templates` - HTML templates for report generation
 
 ## Prompt Schema
 
@@ -193,6 +196,8 @@ The framework can be configured using the following environment variables:
 - `ANTHROPIC_API_KEY` - Your Anthropic API key
 - `EVAL_MODELS` - JSON mapping of provider names to models, e.g. `{"openai":"gpt-4o","anthropic":"claude-3-sonnet"}`
 - `EVAL_CONCURRENCY` - Number of concurrent evaluations to run (default: 2)
+- `EVAL_JUDGE_PROVIDER` - Provider to use for validation (default: "anthropic")
+- `EVAL_JUDGE_MODEL` - Model to use for validation (default: "claude-3-5-haiku-latest")
 
 ### MCP Server Configuration
 - `MCP_SERVER_COMMAND` - Command to start the MCP server as a child process (e.g. `node build/index.mjs`)

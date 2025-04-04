@@ -5,12 +5,28 @@ import { LLMProvider } from './types.js';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
+import mustache from 'mustache';
+
+// Configuration interface
+interface EvalConfig {
+  judgeProvider: string;
+  judgeModel: string;
+}
 
 // OpenAI provider implementation
 class OpenAIProvider implements LLMProvider {
   name = 'openai';
   models = ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+  
+  // Track validation tokens (for judging)
   private tokenCounts = { prompt: 0, completion: 0, total: 0 };
+  
+  // Track tool usage tokens separately
+  private toolTokenCounts = { toolPrompt: 0, toolCompletion: 0, toolTotal: 0 };
+  
+  // Flag to determine if a call is for validation or tool usage
+  private isToolCall = false;
+  
   private client: OpenAI;
 
   constructor(private apiKey: string) {
@@ -19,34 +35,45 @@ class OpenAIProvider implements LLMProvider {
     });
   }
 
+  // Set the context for token tracking
+  setToolCallContext(isToolCall: boolean) {
+    this.isToolCall = isToolCall;
+  }
+
   async runPrompt(prompt: string, model: string): Promise<string> {
     try {
-      console.log(`Running OpenAI prompt with model ${model}`);
+      // Determine if this is for tool usage or validation
+      const isForTool = this.isToolCall;
+      console.log(`Running OpenAI prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
       
-      // Check if we're using a mock/demo key
-      if (this.apiKey === 'demo-key') {
-        // Mock response
-        this.tokenCounts.prompt += prompt.length / 4;
-        const response = "SCORE: 1\nPASSED: true\nREASONING: The tool returned the expected data format with dataset information.";
-        this.tokenCounts.completion += response.length / 4;
-        this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
-        return response;
-      }
+      // Different system prompts based on context
+      const systemPrompt = isForTool ?
+        'You are an assistant helping with data analysis. Use the tools available to analyze data and answer questions.' : 
+        'You are an evaluation assistant that reviews tool responses and determines if they meet criteria. Format your response as SCORE: [0-1 number], PASSED: [true/false], REASONING: [your detailed explanation].';
       
       // Real API call
       const response = await this.client.chat.completions.create({
         model,
         messages: [
-          { role: 'system', content: 'You are an evaluation assistant that reviews tool responses and determines if they meet criteria. Format your response as SCORE: [0-1 number], PASSED: [true/false], REASONING: [your detailed explanation].' },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
         ],
         temperature: 0.1
       });
       
-      // Update token counts
-      this.tokenCounts.prompt += response.usage?.prompt_tokens || 0;
-      this.tokenCounts.completion += response.usage?.completion_tokens || 0;
-      this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
+      // Update appropriate token counter based on context
+      if (isForTool) {
+        this.toolTokenCounts.toolPrompt += response.usage?.prompt_tokens || 0;
+        this.toolTokenCounts.toolCompletion += response.usage?.completion_tokens || 0;
+        this.toolTokenCounts.toolTotal = this.toolTokenCounts.toolPrompt + this.toolTokenCounts.toolCompletion;
+      } else {
+        this.tokenCounts.prompt += response.usage?.prompt_tokens || 0;
+        this.tokenCounts.completion += response.usage?.completion_tokens || 0;
+        this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
+      }
+      
+      // Reset context after call
+      this.isToolCall = false;
       
       return response.choices[0].message.content || '';
     } catch (error) {
@@ -56,7 +83,10 @@ class OpenAIProvider implements LLMProvider {
   }
 
   getTokenUsage() {
-    return { ...this.tokenCounts };
+    return { 
+      ...this.tokenCounts,
+      ...this.toolTokenCounts
+    };
   }
 }
 
@@ -64,7 +94,16 @@ class OpenAIProvider implements LLMProvider {
 class AnthropicProvider implements LLMProvider {
   name = 'anthropic';
   models = ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest', 'claude-3-opus-latest'];
+  
+  // Track validation tokens (for judging)
   private tokenCounts = { prompt: 0, completion: 0, total: 0 };
+  
+  // Track tool usage tokens separately
+  private toolTokenCounts = { toolPrompt: 0, toolCompletion: 0, toolTotal: 0 };
+  
+  // Flag to determine if a call is for validation or tool usage
+  private isToolCall = false;
+  
   private client: Anthropic;
 
   constructor(private apiKey: string) {
@@ -73,22 +112,21 @@ class AnthropicProvider implements LLMProvider {
     });
   }
 
+  // Set the context for token tracking
+  setToolCallContext(isToolCall: boolean) {
+    this.isToolCall = isToolCall;
+  }
+
   async runPrompt(prompt: string, model: string): Promise<string> {
     try {
-      console.log(`Running Anthropic prompt with model ${model}`);
+      // Determine if this is for tool usage or validation
+      const isForTool = this.isToolCall;
+      console.log(`Running Anthropic prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
       
-      // Check if we're using a mock/demo key
-      if (this.apiKey === 'demo-key') {
-        // Mock response
-        this.tokenCounts.prompt += prompt.length / 4;
-        const response = "SCORE: 0.9\nPASSED: true\nREASONING: The tool response contains the expected dataset information with all required fields.";
-        this.tokenCounts.completion += response.length / 4;
-        this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
-        return response;
-      }
-      
-      // System prompt for evaluation
-      const systemPrompt = 'You are an evaluation assistant that reviews tool responses and determines if they meet criteria. Format your response as SCORE: [0-1 number], PASSED: [true/false], REASONING: [your detailed explanation].';
+      // Different system prompts based on context
+      const systemPrompt = isForTool ?
+        'You are an assistant helping with data analysis. Use the tools available to analyze data and answer questions.' : 
+        'You are an evaluation assistant that reviews tool responses and determines if they meet criteria. Format your response as SCORE: [0-1 number], PASSED: [true/false], REASONING: [your detailed explanation].';
       
       // Real API call
       const response = await this.client.messages.create({
@@ -101,10 +139,19 @@ class AnthropicProvider implements LLMProvider {
         temperature: 0.1
       });
       
-      // Update token counts
-      this.tokenCounts.prompt += response.usage?.input_tokens || 0;
-      this.tokenCounts.completion += response.usage?.output_tokens || 0;
-      this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
+      // Update appropriate token counter based on context
+      if (isForTool) {
+        this.toolTokenCounts.toolPrompt += response.usage?.input_tokens || 0;
+        this.toolTokenCounts.toolCompletion += response.usage?.output_tokens || 0;
+        this.toolTokenCounts.toolTotal = this.toolTokenCounts.toolPrompt + this.toolTokenCounts.toolCompletion;
+      } else {
+        this.tokenCounts.prompt += response.usage?.input_tokens || 0;
+        this.tokenCounts.completion += response.usage?.output_tokens || 0;
+        this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
+      }
+      
+      // Reset context after call
+      this.isToolCall = false;
       
       return response.content[0].text;
     } catch (error) {
@@ -114,7 +161,10 @@ class AnthropicProvider implements LLMProvider {
   }
 
   getTokenUsage() {
-    return { ...this.tokenCounts };
+    return { 
+      ...this.tokenCounts,
+      ...this.toolTokenCounts
+    };
   }
 }
 
@@ -131,9 +181,30 @@ async function generateReportIndex(reportsDir: string): Promise<void> {
     return b.localeCompare(a);
   });
   
-  // Create index.html
-  const html = `
-<!DOCTYPE html>
+  // Prepare template data
+  const reports = reportFiles.map((file, index) => {
+    const isLatest = index === 0;
+    const dateMatch = file.match(/report-(.+)\.html/);
+    const dateStr = dateMatch ? dateMatch[1].replace(/-/g, ':').replace('T', ' ').substr(0, 19) : 'Unknown date';
+    
+    return {
+      filename: file,
+      dateStr,
+      isLatest
+    };
+  });
+  
+  // Load template
+  const templatePath = path.join(process.cwd(), 'eval', 'templates', 'index.html');
+  
+  let template;
+  try {
+    template = await fs.readFile(templatePath, 'utf-8');
+    console.log(`Loaded index template from ${templatePath}`);
+  } catch (error) {
+    console.error(`Error loading template from ${templatePath}:`, error);
+    // Fall back to a basic template if the file doesn't exist
+    template = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -157,22 +228,20 @@ async function generateReportIndex(reportsDir: string): Promise<void> {
     <p>Select a report to view detailed evaluation results:</p>
     
     <ul>
-      ${reportFiles.map((file, index) => {
-        const isLatest = index === 0;
-        const dateMatch = file.match(/report-(.+)\.html/);
-        const dateStr = dateMatch ? dateMatch[1].replace(/-/g, ':').replace('T', ' ').substr(0, 19) : 'Unknown date';
-        
-        return `
-      <li class="${isLatest ? 'latest' : ''}">
-        <a href="${file}">${isLatest ? '📊 Latest: ' : ''}Report from ${dateStr}</a>
-        ${isLatest ? '<small>(This is the most recent evaluation run)</small>' : ''}
-      </li>`;
-      }).join('')}
+      {{#reports}}
+      <li class="{{#isLatest}}latest{{/isLatest}}">
+        <a href="{{filename}}">{{#isLatest}}📊 Latest: {{/isLatest}}Report from {{dateStr}}</a>
+        {{#isLatest}}<small>(This is the most recent evaluation run)</small>{{/isLatest}}
+      </li>
+      {{/reports}}
     </ul>
   </div>
 </body>
-</html>
-  `;
+</html>`;
+  }
+  
+  // Render template
+  const html = mustache.render(template, { reports });
   
   await fs.writeFile(path.join(reportsDir, 'index.html'), html, 'utf-8');
   console.log(`Report index generated at: ${path.join(reportsDir, 'index.html')}`);
@@ -184,9 +253,18 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
   const summaryData = await fs.readFile(summaryPath, 'utf-8');
   const summary = JSON.parse(summaryData);
   
-  // Generate a simple HTML report
-  const html = `
-<!DOCTYPE html>
+  // Load template
+  const templatePath = path.join(process.cwd(), 'eval', 'templates', 'report.html');
+  
+  let template;
+  try {
+    template = await fs.readFile(templatePath, 'utf-8');
+    console.log(`Loaded report template from ${templatePath}`);
+  } catch (error) {
+    console.error(`Error loading template from ${templatePath}:`, error);
+    // Fall back to a basic template if the file doesn't exist
+    // Using minimal version - in a real implementation you'd have a complete fallback template
+    template = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -196,168 +274,90 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
     body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
     .container { max-width: 1200px; margin: 0 auto; }
     h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
-    h2 { color: #F5A623; margin-top: 30px; }
-    .summary { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-    .stat { text-align: center; }
-    .stat .value { font-size: 2em; font-weight: bold; margin: 10px 0; }
-    .stat .label { font-size: 0.9em; color: #666; }
-    .success { color: #28a745; }
-    .failure { color: #dc3545; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
-    th { background-color: #f5f5f5; }
-    tr:hover { background-color: #f1f1f1; }
-    .result-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; border: 1px solid #eaeaea; }
-    .code { font-family: monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
-    .token-usage { margin-top: 10px; font-size: 0.9em; color: #666; }
-    .tool-calls { margin-top: 20px; }
-    .tool-call { margin-bottom: 15px; padding: 10px; border-left: 3px solid #F5A623; background: #fffbf4; }
-    .multi-step-label { background: #f0f8ff; border-radius: 3px; padding: 3px 6px; color: #0066cc; font-size: 0.8em; margin-left: 8px; }
-    .conversation-label { background: #f0fff0; border-radius: 3px; padding: 3px 6px; color: #008800; font-size: 0.8em; margin-left: 8px; }
-    .badge { display: inline-block; padding: 0.25em 0.4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: 0.25rem; }
-    .back-to-top { display: block; text-align: right; margin: 10px 0; font-size: 0.9em; }
-    a { color: #0066cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    nav { position: sticky; top: 0; background: #fff; padding: 10px 0; border-bottom: 1px solid #eee; margin-bottom: 20px; z-index: 100; }
-    nav a { margin-right: 15px; font-weight: bold; }
-    .page-section { scroll-margin-top: 60px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <nav>
-      <a href="#summary">Summary</a>
-      <a href="#results-table">Results Table</a>
-      <a href="#detailed-results">Detailed Results</a>
-    </nav>
-    
     <h1>Honeycomb MCP Evaluation Report</h1>
-    <p>Generated on: ${new Date(summary.timestamp).toLocaleString()}</p>
-    
-    <div id="summary" class="summary page-section">
-      <h2>Summary</h2>
-      <div class="summary-grid">
-        <div class="stat">
-          <div class="label">Total Tests</div>
-          <div class="value">${summary.totalTests}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Passed</div>
-          <div class="value success">${summary.passed}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Failed</div>
-          <div class="value failure">${summary.failed}</div>
-        </div>
-        <div class="stat">
-          <div class="label">Success Rate</div>
-          <div class="value">${(summary.successRate * 100).toFixed(1)}%</div>
-        </div>
-        <div class="stat">
-          <div class="label">Avg Latency</div>
-          <div class="value">${summary.averageLatency.toFixed(0)}ms</div>
-        </div>
-        <div class="stat">
-          <div class="label">Avg Tool Calls</div>
-          <div class="value">${summary.averageToolCalls ? summary.averageToolCalls.toFixed(1) : 'N/A'}</div>
-        </div>
-      </div>
-    </div>
-    
-    <h2 id="results-table" class="page-section">Results by Test</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Test ID</th>
-          <th>Type</th>
-          <th>Provider / Model</th>
-          <th>Tool Calls</th>
-          <th>Status</th>
-          <th>Score</th>
-          <th>Latency</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${summary.results.map(result => `
-          <tr>
-            <td><a href="#test-${result.id}-${result.provider}-${result.model.replace(/[^a-zA-Z0-9-]/g, '_')}">${result.id}</a></td>
-            <td>
-              ${result.prompt.conversationMode 
-                ? `<span class="badge conversation-label">Conversation</span>` 
-                : result.prompt.steps && result.prompt.steps.length > 0 
-                  ? `<span class="badge multi-step-label">Multi-step</span>` 
-                  : `<span class="badge">Single</span>`}
-            </td>
-            <td>${result.provider} / ${result.model}</td>
-            <td>${result.metrics.toolCallCount || 1}</td>
-            <td class="${result.validation.passed ? 'success' : 'failure'}">${result.validation.passed ? 'PASS' : 'FAIL'}</td>
-            <td>${result.validation.score !== undefined ? result.validation.score.toFixed(2) : 'N/A'}</td>
-            <td>${result.metrics.latencyMs}ms</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-    
-    <h2 id="detailed-results" class="page-section">Detailed Results</h2>
-    ${summary.results.map(result => `
-      <div id="test-${result.id}-${result.provider}-${result.model.replace(/[^a-zA-Z0-9-]/g, '_')}" class="result-details">
-        <h3>${result.id} ${
-          result.prompt.conversationMode 
-            ? `<span class="badge conversation-label">Conversation Mode</span>` 
-            : result.prompt.steps && result.prompt.steps.length > 0 
-              ? `<span class="badge multi-step-label">Multi-step</span>` 
-              : ''
-        }</h3>
-        <p><strong>Provider/Model:</strong> ${result.provider}/${result.model}</p>
-        <p><strong>Status:</strong> <span class="${result.validation.passed ? 'success' : 'failure'}">${result.validation.passed ? 'PASS' : 'FAIL'}</span></p>
-        <p><strong>Score:</strong> ${result.validation.score !== undefined ? result.validation.score.toFixed(2) : 'N/A'}</p>
-        <p><strong>Validation Reasoning:</strong> ${result.validation.reasoning}</p>
-        <p><strong>Tool Calls:</strong> ${result.metrics.toolCallCount || 1}</p>
-        
-        ${result.metrics.tokenUsage?.total ? `
-        <div class="token-usage">
-          <strong>Token Usage:</strong> 
-          Prompt: ${result.metrics.tokenUsage.prompt || 0} | 
-          Completion: ${result.metrics.tokenUsage.completion || 0} | 
-          Total: ${result.metrics.tokenUsage.total || 0}
-        </div>
-        ` : ''}
-        
-        ${result.toolCalls && result.toolCalls.length > 0 ? `
-          <details>
-            <summary>Tool Calls (${result.toolCalls.length})</summary>
-            <div class="tool-calls">
-              ${result.toolCalls.map((call, index) => `
-                <div class="tool-call">
-                  <h4>Call ${index + 1}: ${call.tool || 'N/A'}</h4>
-                  <p><strong>Parameters:</strong></p>
-                  <div class="code">${JSON.stringify(call.parameters || {}, null, 2)}</div>
-                  <p><strong>Response:</strong></p>
-                  <div class="code">${JSON.stringify(call.response || {}, null, 2)}</div>
-                  <p><small>Latency: ${call.latencyMs || 0}ms</small></p>
-                </div>
-              `).join('')}
-            </div>
-          </details>
-        ` : `
-          <details>
-            <summary>Tool Response</summary>
-            <div class="code">${JSON.stringify(result.toolResponse, null, 2)}</div>
-          </details>
-        `}
-        
-        <details>
-          <summary>Prompt Details</summary>
-          <div class="code">${JSON.stringify(result.prompt, null, 2)}</div>
-        </details>
-        <a href="#results-table" class="back-to-top">Back to Results</a>
-      </div>
-    `).join('')}
+    <p>Generated on: {{timestamp}}</p>
+    <p>See template file for complete implementation.</p>
   </div>
 </body>
-</html>
-  `;
+</html>`;
+  }
+  
+  // Prepare template data
+  const view = {
+    timestamp: new Date(summary.timestamp).toLocaleString(),
+    totalTests: summary.totalTests,
+    passed: summary.passed,
+    failed: summary.failed,
+    successRate: (summary.successRate * 100).toFixed(1),
+    averageLatency: summary.averageLatency.toFixed(0),
+    averageToolCalls: summary.averageToolCalls ? summary.averageToolCalls.toFixed(1) : 'N/A',
+    averageToolTokens: summary.averageToolTokens ? summary.averageToolTokens.toFixed(0) : 'N/A',
+    judgeInfo: summary.metadata?.judge ? {
+      provider: summary.metadata.judge.provider,
+      model: summary.metadata.judge.model
+    } : null,
+    results: summary.results.map(result => {
+      const isAgent = result.prompt.agentMode;
+      const isConversation = result.prompt.conversationMode;
+      const isMultiStep = result.prompt.steps && result.prompt.steps.length > 0;
+      const isSingle = !isAgent && !isConversation && !isMultiStep;
+      
+      // Format token usage if available
+      const hasTokenUsage = result.metrics.tokenUsage?.total !== undefined;
+      
+      // Format tool calls
+      const hasToolCalls = result.toolCalls && result.toolCalls.length > 0;
+      const toolCalls = hasToolCalls ? result.toolCalls.map((call, idx) => ({
+        tool: call.tool || 'N/A',
+        index: idx + 1,
+        parametersJson: JSON.stringify(call.parameters || {}, null, 2),
+        responseJson: JSON.stringify(call.response || {}, null, 2),
+        callLatency: call.latencyMs || 0
+      })) : [];
+      
+      // Get agent scores if available
+      const agentScores = result.validation.agentScores;
+      
+      return {
+        id: result.id,
+        provider: result.provider,
+        model: result.model,
+        modelSafe: result.model.replace(/[^a-zA-Z0-9-]/g, '_'),
+        isAgent,
+        isConversation,
+        isMultiStep,
+        isSingle,
+        toolCallCount: result.metrics.toolCallCount || 1,
+        passed: result.validation.passed,
+        score: result.validation.score !== undefined ? result.validation.score.toFixed(2) : 'N/A',
+        reasoning: result.validation.reasoning,
+        latency: result.metrics.latencyMs,
+        // Agent-specific metrics
+        goalAchievement: agentScores?.goalAchievement !== undefined ? agentScores.goalAchievement.toFixed(2) : 'N/A',
+        reasoningQuality: agentScores?.reasoningQuality !== undefined ? agentScores.reasoningQuality.toFixed(2) : 'N/A',
+        pathEfficiency: agentScores?.pathEfficiency !== undefined ? agentScores.pathEfficiency.toFixed(2) : 'N/A',
+        hasTokenUsage,
+        promptTokens: result.metrics.tokenUsage?.prompt || 0,
+        completionTokens: result.metrics.tokenUsage?.completion || 0,
+        totalTokens: result.metrics.tokenUsage?.total || 0,
+        toolPromptTokens: result.metrics.tokenUsage?.toolPrompt || 0,
+        toolCompletionTokens: result.metrics.tokenUsage?.toolCompletion || 0,
+        toolTotalTokens: result.metrics.tokenUsage?.toolTotal || 0,
+        hasToolCalls,
+        toolCallsLength: toolCalls.length,
+        toolCalls,
+        toolResponseJson: JSON.stringify(result.toolResponse, null, 2),
+        promptJson: JSON.stringify(result.prompt, null, 2)
+      };
+    })
+  };
+  
+  // Render template
+  const html = mustache.render(template, view);
   
   await fs.writeFile(outputPath, html, 'utf-8');
   console.log(`Report generated at: ${outputPath}`);
@@ -377,33 +377,61 @@ async function main() {
   
   if (command === 'run') {
     // Load environment variables for API keys
-    const openaiApiKey = process.env.OPENAI_API_KEY || 'demo-key';
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY || 'demo-key';
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     
-    // Determine which providers to use based on available API keys
-    const providers = [];
-    if (openaiApiKey && openaiApiKey !== 'demo-key') {
+    // Initialize providers array
+    const providers: LLMProvider[] = [];
+    
+    // Add providers based on available API keys
+    if (openaiApiKey) {
       providers.push(new OpenAIProvider(openaiApiKey));
       console.log('Added OpenAI provider with API key');
     }
-    if (anthropicApiKey && anthropicApiKey !== 'demo-key') {
+    
+    if (anthropicApiKey) {
       providers.push(new AnthropicProvider(anthropicApiKey));
       console.log('Added Anthropic provider with API key');
     }
     
-    // Fallback if no API keys are available
+    // Exit if no API keys are available
     if (providers.length === 0) {
-      console.log('No valid API keys available, using mock providers');
-      providers.push(new OpenAIProvider('demo-key'));
-      providers.push(new AnthropicProvider('demo-key'));
+      console.error('\nERROR: No valid API keys available.\n');
+      console.error('You must set at least one of these environment variables:');
+      console.error('  - OPENAI_API_KEY    for OpenAI models');
+      console.error('  - ANTHROPIC_API_KEY for Anthropic models\n');
+      console.error('For example: OPENAI_API_KEY=your_key pnpm run eval\n');
+      process.exit(1);
     }
+    
+    // Judge configuration
+    const config: EvalConfig = {
+      judgeProvider: process.env.EVAL_JUDGE_PROVIDER || 'anthropic',
+      judgeModel: process.env.EVAL_JUDGE_MODEL || 'claude-3-5-haiku-latest'
+    };
+    
+    // Validate judge configuration
+    const judgeProvider = providers.find(p => p.name === config.judgeProvider);
+    if (!judgeProvider) {
+      console.error(`Specified judge provider "${config.judgeProvider}" not available. Check API keys and configuration.`);
+      process.exit(1);
+    }
+    
+    // Check if the model exists for the provider
+    if (!judgeProvider.models.includes(config.judgeModel)) {
+      console.warn(`Warning: Judge model "${config.judgeModel}" not in known models for ${config.judgeProvider}.`);
+      console.warn(`Available models: ${judgeProvider.models.join(', ')}`);
+      console.warn('Continuing with the specified model, but it might not work.');
+    }
+    
+    console.log(`Using ${config.judgeProvider}/${config.judgeModel} as the validation judge`);
     
     // Select models to use (could be from config or args)
     // Parse from JSON string in env var if available
     // This can be either a string or an array of strings for each provider
     let selectedModels = new Map([
       ['openai', ['gpt-4o']],
-      ['anthropic', ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest']]
+      ['anthropic', ['claude-3-5-haiku-latest']]
     ]);
     
     if (process.env.EVAL_MODELS) {
@@ -437,7 +465,11 @@ async function main() {
       resultsDir: path.resolve('eval/results'),
       providers,
       selectedModels,
-      concurrency
+      concurrency,
+      judge: {
+        provider: config.judgeProvider,
+        model: config.judgeModel
+      }
     };
     
     // For stdio-based MCP connection
