@@ -14,6 +14,10 @@ on:
         required: false
         default: '{"openai":"gpt-4o","anthropic":"claude-3-sonnet"}'
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   run-evaluation:
     runs-on: ubuntu-latest
@@ -65,7 +69,12 @@ jobs:
       if: success()
       run: |
         # Find the latest summary file
-        SUMMARY_FILE=$(ls -t eval/results/summary-*.json | head -1)
+        SUMMARY_FILE=$(ls -t eval/results/summary-*.json | head -1 || echo "")
+        
+        if [ -z "$SUMMARY_FILE" ] || [ ! -f "$SUMMARY_FILE" ]; then
+          echo "No summary file found. Evaluation may have failed."
+          exit 0
+        fi
         
         # Extract key metrics
         TOTAL=$(jq '.totalTests' $SUMMARY_FILE)
@@ -88,9 +97,9 @@ jobs:
           PR_COMMENT+="- Success Rate: ${SUCCESS_RATE}%\n\n"
           PR_COMMENT+="[View detailed results in the workflow artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           
-          echo "$PR_COMMENT" > pr_comment.txt
+          echo -e "$PR_COMMENT" > pr_comment.txt
           
           gh pr comment ${{ github.event.pull_request.number }} --body-file pr_comment.txt
         fi
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
