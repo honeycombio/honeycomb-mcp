@@ -1,0 +1,86 @@
+name: Run Evaluations
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          run_install: false
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build project
+        run: pnpm run build
+        
+      - name: Run evaluations
+        run: pnpm run eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Use only limited models for CI to save costs
+          EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
+          EVAL_CONCURRENCY: 2
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+          
+      - name: Upload evaluation reports
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'eval/reports'
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        
+      - name: Find latest report
+        id: find-report
+        run: |
+          LATEST_REPORT=$(ls -t eval/reports/*.html | head -1)
+          echo "latest_report=$LATEST_REPORT" >> $GITHUB_OUTPUT
+          
+      - name: Post report summary
+        if: github.event_name == 'pull_request'
+        run: |
+          REPORT_URL="${{ steps.deployment.outputs.page_url }}$(basename ${{ steps.find-report.outputs.latest_report }})"
+          SUMMARY=$(cat eval/results/all-results-*.json | jq -r '.summary')
+          
+          echo "## Evaluation Results" > $GITHUB_STEP_SUMMARY
+          echo "Ran evaluations with OpenAI and Anthropic models." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Total tests: ${SUMMARY.totalTests}" >> $GITHUB_STEP_SUMMARY
+          echo "- Passed: ${SUMMARY.passed}" >> $GITHUB_STEP_SUMMARY
+          echo "- Failed: ${SUMMARY.failed}" >> $GITHUB_STEP_SUMMARY
+          echo "- Success rate: ${SUMMARY.successRate * 100}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View detailed report]($REPORT_URL)" >> $GITHUB_STEP_SUMMARY

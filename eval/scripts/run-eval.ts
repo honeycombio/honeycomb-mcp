@@ -118,6 +118,63 @@ class AnthropicProvider implements LLMProvider {
   }
 }
 
+async function generateReportIndex(reportsDir: string): Promise<void> {
+  // Get all report files
+  const files = await fs.readdir(reportsDir);
+  const reportFiles = files.filter(file => file.startsWith('report-') && file.endsWith('.html'));
+  
+  // Sort by date (newest first)
+  reportFiles.sort((a, b) => {
+    return b.localeCompare(a);
+  });
+  
+  // Create index.html
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honeycomb MCP Evaluation Reports</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
+    ul { list-style-type: none; padding: 0; }
+    li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .date { color: #666; font-size: 0.9em; }
+    .latest { background: #fffbf4; border-left: 3px solid #F5A623; padding-left: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Honeycomb MCP Evaluation Reports</h1>
+    <p>Select a report to view detailed evaluation results:</p>
+    
+    <ul>
+      ${reportFiles.map((file, index) => {
+        const isLatest = index === 0;
+        const dateMatch = file.match(/report-(.+)\.html/);
+        const dateStr = dateMatch ? dateMatch[1].replace(/-/g, ':').replace('T', ' ').substr(0, 19) : 'Unknown date';
+        
+        return `
+      <li class="${isLatest ? 'latest' : ''}">
+        <a href="${file}">${isLatest ? '📊 Latest: ' : ''}Report from ${dateStr}</a>
+        ${isLatest ? '<small>(This is the most recent evaluation run)</small>' : ''}
+      </li>`;
+      }).join('')}
+    </ul>
+  </div>
+</body>
+</html>
+  `;
+  
+  await fs.writeFile(path.join(reportsDir, 'index.html'), html, 'utf-8');
+  console.log(`Report index generated at: ${path.join(reportsDir, 'index.html')}`);
+}
+
 async function generateReport(summaryPath: string, outputPath: string): Promise<void> {
   // Ensure reports directory exists
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -148,7 +205,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
     th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
     th { background-color: #f5f5f5; }
     tr:hover { background-color: #f1f1f1; }
-    .result-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px; }
+    .result-details { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 30px; border: 1px solid #eaeaea; }
     .code { font-family: monospace; background: #f0f0f0; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
     .token-usage { margin-top: 10px; font-size: 0.9em; color: #666; }
     .tool-calls { margin-top: 20px; }
@@ -156,14 +213,26 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
     .multi-step-label { background: #f0f8ff; border-radius: 3px; padding: 3px 6px; color: #0066cc; font-size: 0.8em; margin-left: 8px; }
     .conversation-label { background: #f0fff0; border-radius: 3px; padding: 3px 6px; color: #008800; font-size: 0.8em; margin-left: 8px; }
     .badge { display: inline-block; padding: 0.25em 0.4em; font-size: 75%; font-weight: 700; line-height: 1; text-align: center; white-space: nowrap; vertical-align: baseline; border-radius: 0.25rem; }
+    .back-to-top { display: block; text-align: right; margin: 10px 0; font-size: 0.9em; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav { position: sticky; top: 0; background: #fff; padding: 10px 0; border-bottom: 1px solid #eee; margin-bottom: 20px; z-index: 100; }
+    nav a { margin-right: 15px; font-weight: bold; }
+    .page-section { scroll-margin-top: 60px; }
   </style>
 </head>
 <body>
   <div class="container">
+    <nav>
+      <a href="#summary">Summary</a>
+      <a href="#results-table">Results Table</a>
+      <a href="#detailed-results">Detailed Results</a>
+    </nav>
+    
     <h1>Honeycomb MCP Evaluation Report</h1>
     <p>Generated on: ${new Date(summary.timestamp).toLocaleString()}</p>
     
-    <div class="summary">
+    <div id="summary" class="summary page-section">
       <h2>Summary</h2>
       <div class="summary-grid">
         <div class="stat">
@@ -193,7 +262,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       </div>
     </div>
     
-    <h2>Results by Test</h2>
+    <h2 id="results-table" class="page-section">Results by Test</h2>
     <table>
       <thead>
         <tr>
@@ -209,7 +278,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       <tbody>
         ${summary.results.map(result => `
           <tr>
-            <td>${result.id}</td>
+            <td><a href="#test-${result.id}-${result.provider}-${result.model.replace(/[^a-zA-Z0-9-]/g, '_')}">${result.id}</a></td>
             <td>
               ${result.prompt.conversationMode 
                 ? `<span class="badge conversation-label">Conversation</span>` 
@@ -227,9 +296,9 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       </tbody>
     </table>
     
-    <h2>Detailed Results</h2>
+    <h2 id="detailed-results" class="page-section">Detailed Results</h2>
     ${summary.results.map(result => `
-      <div class="result-details">
+      <div id="test-${result.id}-${result.provider}-${result.model.replace(/[^a-zA-Z0-9-]/g, '_')}" class="result-details">
         <h3>${result.id} ${
           result.prompt.conversationMode 
             ? `<span class="badge conversation-label">Conversation Mode</span>` 
@@ -279,6 +348,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
           <summary>Prompt Details</summary>
           <div class="code">${JSON.stringify(result.prompt, null, 2)}</div>
         </details>
+        <a href="#results-table" class="back-to-top">Back to Results</a>
       </div>
     `).join('')}
   </div>
@@ -394,17 +464,28 @@ async function main() {
     console.log(`Evaluation complete. Summary saved to ${summaryPath}`);
     
     // Generate report
-    const reportPath = path.resolve(`eval/reports/report-${new Date().toISOString().replace(/[:\.]/g, '-')}.html`);
+    const reportTimestamp = new Date().toISOString().replace(/[:\.]/g, '-');
+    const reportPath = path.resolve(`eval/reports/report-${reportTimestamp}.html`);
     await generateReport(summaryPath, reportPath);
+    
+    // Generate or update an index.html that lists all reports
+    await generateReportIndex(path.resolve('eval/reports'));
   } else if (command === 'report' && args[1]) {
     const summaryPath = args[1];
-    const reportPath = path.resolve(`eval/reports/report-${new Date().toISOString().replace(/[:\.]/g, '-')}.html`);
+    const reportTimestamp = new Date().toISOString().replace(/[:\.]/g, '-');
+    const reportPath = path.resolve(`eval/reports/report-${reportTimestamp}.html`);
     await generateReport(summaryPath, reportPath);
+    
+    // Update the index after generating a new report
+    await generateReportIndex(path.resolve('eval/reports'));
+  } else if (command === 'update-index') {
+    await generateReportIndex(path.resolve('eval/reports'));
   } else {
     console.log(`
 Usage:
   run-eval run                    Run all evaluations
   run-eval report [summary-path]  Generate report from a summary file
+  run-eval update-index           Update the reports index.html file
     `);
   }
 }
