@@ -63,7 +63,7 @@ class OpenAIProvider implements LLMProvider {
 // Anthropic provider implementation
 class AnthropicProvider implements LLMProvider {
   name = 'anthropic';
-  models = ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest'];
+  models = ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest', 'claude-3-opus-latest'];
   private tokenCounts = { prompt: 0, completion: 0, total: 0 };
   private client: Anthropic;
 

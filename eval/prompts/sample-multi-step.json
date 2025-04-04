@@ -1,8 +1,8 @@
 {
-  "id": "multi-step-combined-query",
-  "name": "Multi-Step Dataset and Query Test",
-  "description": "Tests a multi-step scenario where dataset information is retrieved and then a query is run",
-  "prompt": "Retrieve information about the 'frontend' dataset and then run a simple count query on it",
+  "id": "multi-step-dependent-query",
+  "name": "Multi-Step Dataset Analysis and Targeted Query",
+  "description": "Tests a multi-step scenario where dataset column information is retrieved and then used for a targeted query",
+  "prompt": "Retrieve column information about the 'frontend' dataset and then run a query on a specific numeric column (duration_ms or any latency/timing column) discovered in the first step",
   "steps": [
     {
       "tool": "get_columns",
@@ -10,7 +10,7 @@
         "environment": "ms-demo",
         "dataset": "frontend"
       },
-      "description": "Get column information for the frontend dataset"
+      "description": "Get column information for the frontend dataset to identify numeric/timing columns"
     },
     {
       "tool": "run_query",
@@ -19,26 +19,42 @@
         "dataset": "frontend",
         "calculations": [
           {
-            "op": "COUNT"
+            "op": "AVG",
+            "column": "duration_ms"
+          },
+          {
+            "op": "P95",
+            "column": "duration_ms"
           }
         ],
-        "time_range": 60
+        "breakdowns": ["name"],
+        "time_range": 3600,
+        "orders": [
+          {
+            "op": "P95",
+            "column": "duration_ms",
+            "order": "descending"
+          }
+        ],
+        "limit": 5
       },
-      "description": "Run a simple count query on the frontend dataset"
+      "description": "Run a targeted query analyzing latency metrics broken down by operation name"
     }
   ],
   "validation": {
-    "prompt": "Evaluate whether both tool calls were successful. The first response should return column definitions for the 'frontend' dataset, and the second should return a valid COUNT query result. Both responses should be error-free and contain the expected data.",
+    "prompt": "Evaluate whether both tool calls were successful and demonstrate a logical workflow. The first response should return column definitions for the 'frontend' dataset that includes timing/latency columns like 'duration_ms'. The second call should run a meaningful query specifically using those timing columns (e.g., calculating AVG and P95 of duration_ms), demonstrating that information from the first call informed the second call. Both responses should be error-free and contain the expected data.",
     "expectedOutcome": {
       "success": true,
       "criteria": [
-        "First call returns column definitions for the frontend dataset",
-        "Second call returns a valid COUNT query result with no errors",
-        "Total latency is reasonable"
+        "First call returns column definitions for the frontend dataset that include latency/timing columns",
+        "Second call uses specific columns discovered in the first call for meaningful analysis",
+        "The second call demonstrates a real-world analytical pattern (calculating percentiles by operation name)",
+        "Both calls execute successfully without errors",
+        "The workflow demonstrates using information from the first step to inform the second step"
       ]
     }
   },
   "options": {
-    "timeout": 10000
+    "timeout": 15000
   }
 }

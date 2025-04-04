@@ -19,7 +19,10 @@
     "eval:report": "npx tsx eval/scripts/run-eval.ts report",
     "eval:all": "pnpm run build && pnpm run eval",
     "eval:openai": "EVAL_MODELS='{\"openai\":\"gpt-4o\"}' pnpm run eval",
-    "eval:anthropic": "EVAL_MODELS='{\"anthropic\":[\"claude-3-5-haiku-latest\",\"claude-3-7-sonnet-latest\"]}' pnpm run eval"
+    "eval:anthropic": "EVAL_MODELS='{\"anthropic\":[\"claude-3-5-haiku-latest\",\"claude-3-7-sonnet-latest\"]}' pnpm run eval",
+    "eval:anthropic:haiku": "EVAL_MODELS='{\"anthropic\":\"claude-3-5-haiku-latest\"}' pnpm run eval",
+    "eval:anthropic:sonnet": "EVAL_MODELS='{\"anthropic\":\"claude-3-7-sonnet-latest\"}' pnpm run eval",
+    "eval:anthropic:opus": "EVAL_MODELS='{\"anthropic\":\"claude-3-opus-latest\"}' pnpm run eval"
   },
   "publishConfig": {
     "access": "public"

@@ -359,6 +359,11 @@ REASONING: [your detailed explanation]
    * 
    * Note: This is a simplified implementation. A full implementation would use
    * a proper agent framework or MCP conversation API.
+   * 
+   * The implementation includes special handling for:
+   * - Parameter validation and enforcement
+   * - Structured query building for run_query
+   * - Progressive analysis guidance
    */
   private async runConversationMode(prompt: EvalPrompt, provider: LLMProvider, modelName: string): Promise<any[]> {
     if (!this.client) {
@@ -367,38 +372,82 @@ REASONING: [your detailed explanation]
     
     // Get available tools
     const toolsResult = await this.client.listTools();
-    const availableTools = toolsResult.tools.map(t => ({
-      name: t.name,
-      description: t.description || 'No description available',
-      parameters: t.parameters || {}
-    }));
+    
+    // Extract environment from prompt
+    const conversationEnvironment = prompt.prompt.match(/['"]([^'"]+?)['"] environment/)?.[1] || 'ms-demo';
+    
+    // Build detailed tool documentation with required parameters
+    const availableTools = toolsResult.tools.map(t => {
+      // Extract parameter information
+      const parameterInfo = t.parameters ? 
+        this.extractRequiredParams(t.parameters) : 
+        "No parameters required";
+      
+      return {
+        name: t.name,
+        description: t.description || 'No description available',
+        parameters: parameterInfo
+      };
+    });
     
     // Set up conversation tracking
     const toolCalls = [];
     const maxSteps = prompt.maxSteps || 5; // Default to 5 if not specified
     let conversationContext = `
-You are performing a task for evaluation. Your goal is to use the available tools to accomplish the task.
+You are performing a multi-step data analysis task. Your goal is to use the available tools to progressively analyze data, where each step builds on information from previous steps.
+
+TASK:
 ${prompt.prompt}
 
-Available tools:
-${availableTools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
+IMPORTANT CONTEXT:
+- You are working with the environment: "${conversationEnvironment}"
+- Always include the "environment" parameter with value "${conversationEnvironment}" in your tool calls
+- Make sure to use information from previous steps to inform each new step
 
-When you want to use a tool, respond in the following format:
+AVAILABLE TOOLS:
+${availableTools.map(t => `
+## ${t.name}
+${t.description}
+
+Parameters:
+${t.parameters}
+${t.name === 'run_query' ? `
+Example usage:
+\`\`\`json
+{
+  "environment": "${conversationEnvironment}",
+  "dataset": "dataset_name", 
+  "calculations": [
+    {"op": "COUNT"},
+    {"op": "AVG", "column": "duration_ms"}
+  ],
+  "breakdowns": ["service.name"],
+  "time_range": 3600
+}
+\`\`\`
+` : ''}
+`).join('\n')}
+
+FORMAT INSTRUCTIONS:
+When you want to use a tool, respond with:
 \`\`\`json
 {
   "tool": "tool_name",
   "parameters": {
-    "param1": "value1",
-    "param2": "value2"
-  }
+    "environment": "${conversationEnvironment}",
+    "param2": "value2",
+    ...
+  },
+  "reasoning": "Brief explanation of why you're using this tool and how it builds on previous steps"
 }
 \`\`\`
 
-After you receive the tool response, you can either:
-1. Use another tool by responding in the same JSON format
-2. Indicate you're done by responding with:
+When you've completed the analysis, respond with:
 \`\`\`json
-{ "done": true, "explanation": "Your explanation of how you accomplished the task" }
+{ 
+  "done": true, 
+  "explanation": "Detailed explanation of your findings and how you progressively built your analysis"
+}
 \`\`\`
 `;
     
@@ -440,32 +489,51 @@ After you receive the tool response, you can either:
         }
         
         // Call the requested tool
-        const { tool, parameters } = parsedResponse;
-        console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, parameters);
+        const { tool, parameters, reasoning } = parsedResponse;
+        
+        // Ensure environment parameter is set
+        if (!parameters.environment) {
+          parameters.environment = conversationEnvironment;
+        }
+        
+        // Special handling for run_query tool to ensure parameters are valid
+        let processedParameters = { ...parameters };
+        if (tool === 'run_query') {
+          processedParameters = this.ensureValidQueryParameters(processedParameters);
+        }
+        
+        console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
         
         const callStartTime = Date.now();
         const response = await this.client.callTool({
           name: tool,
-          arguments: parameters
+          arguments: processedParameters
         });
         const callEndTime = Date.now();
         
         // Record the tool call
         const toolCall = {
           tool,
-          parameters,
+          parameters: processedParameters,
+          reasoning: reasoning || "No reasoning provided",
           response,
           timestamp: new Date(callStartTime).toISOString(),
           latencyMs: callEndTime - callStartTime
         };
         toolCalls.push(toolCall);
         
-        // Update conversation context
-        conversationContext += `\n\nYou called tool: ${tool}
+        // Update conversation context with more guidance
+        conversationContext += `\n\n## Step ${stepCount} Results:
+You called tool: ${tool}
+Your reasoning: ${reasoning || "No reasoning provided"}
 Parameters: ${JSON.stringify(parameters)}
 Tool response: ${JSON.stringify(response)}
 
-What would you like to do next?`;
+What would you like to do next? Remember to:
+1. Use the information you just learned to inform your next step
+2. Include "${conversationEnvironment}" as the environment parameter
+3. Explain your reasoning for the next step
+`;
         
       } catch (error) {
         // Handle errors in the conversation
@@ -475,8 +543,20 @@ What would you like to do next?`;
           latencyMs: 0
         });
         
-        // Update context with error
-        conversationContext += `\n\nError: ${error.message}\nPlease try again or try a different tool.`;
+        // Update context with error and more guidance
+        conversationContext += `\n\n## Error in Step ${stepCount}:
+Error: ${error.message}
+
+This might be because:
+- Required parameters were missing (especially "environment")
+- The tool name was incorrect
+- Parameters were not formatted correctly
+
+Please try again with correct parameters. Make sure to:
+1. Always include "environment": "${conversationEnvironment}" in your parameters
+2. Check that other required parameters are included
+3. Format your response as valid JSON
+`;
       }
     }
     
@@ -490,6 +570,127 @@ What would you like to do next?`;
     }
     
     return toolCalls;
+  }
+  
+  /**
+   * Extract required parameters information from a JSON Schema
+   */
+  private extractRequiredParams(parameters: any): string {
+    try {
+      // If we have a properties object and required array
+      if (parameters.properties && parameters.required) {
+        const requiredParams = parameters.required;
+        const paramDescriptions = [];
+        
+        // For each property, check if it's required
+        for (const [name, details] of Object.entries(parameters.properties)) {
+          const isRequired = requiredParams.includes(name);
+          const type = details.type || 'any';
+          const description = details.description || '';
+          
+          paramDescriptions.push(
+            `- ${name}${isRequired ? ' (REQUIRED)' : ''}: ${type} - ${description}`
+          );
+        }
+        
+        return paramDescriptions.join('\n');
+      }
+      
+      // Fallback to just stringifying the schema
+      return JSON.stringify(parameters, null, 2);
+    } catch (error) {
+      return "Unable to parse parameters";
+    }
+  }
+  
+  /**
+   * Ensure query parameters are valid for the run_query tool
+   */
+  private ensureValidQueryParameters(parameters: any): any {
+    const processedParams = { ...parameters };
+    
+    // Ensure calculations is always an array
+    if (!processedParams.calculations) {
+      processedParams.calculations = [{ op: "COUNT" }];
+    } else if (!Array.isArray(processedParams.calculations)) {
+      processedParams.calculations = [processedParams.calculations];
+    }
+    
+    // For MAX, AVG, etc. operations, ensure they have a column specified
+    processedParams.calculations = processedParams.calculations.map(calc => {
+      if (calc.op && !calc.column && calc.field) {
+        // Some models might use 'field' instead of 'column'
+        return { ...calc, column: calc.field };
+      }
+      
+      // Simple defaults for common operations that require a column
+      if (calc.op && ['MAX', 'MIN', 'AVG', 'SUM', 'P95', 'P99'].includes(calc.op) && !calc.column) {
+        if (parameters.groupBy?.[0] || parameters.breakdowns?.[0]) {
+          // Use the first group-by field if available
+          const firstField = parameters.groupBy?.[0] || parameters.breakdowns?.[0];
+          return { ...calc, column: firstField };
+        } else {
+          // Default to a standard duration column if we can't determine anything else
+          return { ...calc, column: 'duration_ms' };
+        }
+      }
+      
+      return calc;
+    });
+    
+    // Ensure time_range is present
+    if (!processedParams.time_range && !processedParams.start_time && !processedParams.end_time) {
+      processedParams.time_range = 3600; // Default to last hour
+    }
+    
+    // Standardize parameter names
+    if (processedParams.groupBy && !processedParams.breakdowns) {
+      processedParams.breakdowns = processedParams.groupBy;
+      delete processedParams.groupBy;
+    }
+    
+    if (processedParams.order && !processedParams.orders) {
+      processedParams.orders = processedParams.order;
+      delete processedParams.order;
+    }
+    
+    // Validate and fix orders format 
+    if (processedParams.orders && !Array.isArray(processedParams.orders)) {
+      processedParams.orders = [processedParams.orders];
+    }
+    
+    // Fix any orders that reference calculations
+    if (processedParams.orders && Array.isArray(processedParams.orders)) {
+      processedParams.orders = processedParams.orders.map(order => {
+        if (!order.op && order.column) {
+          // Try to match with a calculation
+          const matchingCalc = processedParams.calculations.find(calc => 
+            calc.column === order.column
+          );
+          if (matchingCalc) {
+            return { 
+              op: matchingCalc.op, 
+              column: matchingCalc.column,
+              order: order.order || 'descending'
+            };
+          }
+        }
+        return order;
+      });
+    }
+    
+    // Ensure query key is moved to top level if present
+    if (processedParams.query) {
+      // Merge query properties into top level
+      for (const [key, value] of Object.entries(processedParams.query)) {
+        if (!processedParams[key]) {
+          processedParams[key] = value;
+        }
+      }
+      delete processedParams.query;
+    }
+    
+    return processedParams;
   }
 
   async runAll(): Promise<EvalSummary> {
