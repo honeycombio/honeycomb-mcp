@@ -79,12 +79,28 @@ jobs:
     - name: Install dependencies
       run: pnpm install
     
+    - name: Build project for evaluation
+      run: pnpm run build
+    
     - name: Create MCP config
       run: |
         echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
         echo "Created MCP config file"
     
+    # Verify the build file exists before running evals
+    - name: Verify build file exists
+      run: |
+        if [ ! -f "build/index.mjs" ]; then
+          echo "ERROR: build/index.mjs does not exist after build step!"
+          echo "<html><body><h1>Evaluation Failed</h1><p>The MCP build output file does not exist. Check the build step for errors.</p></body></html>" > eval/reports/build-failed.html
+          exit 1
+        else
+          echo "Build file found, proceeding with evaluation"
+        fi
+
     - name: Run evaluations
+      id: run_evals
+      continue-on-error: true
       run: pnpm run eval
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -93,6 +109,15 @@ jobs:
         EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
         EVAL_CONCURRENCY: 2
         MCP_SERVER_COMMAND: "node build/index.mjs"
+        
+    # Mark step as failed if evaluations didn't run successfully
+    - name: Check evaluation result
+      if: steps.run_evals.outcome != 'success'
+      run: |
+        echo "Evaluations failed to run properly!"
+        mkdir -p eval/reports
+        echo "<html><body><h1>Evaluation Failed</h1><p>The evaluation process encountered an error. Check the logs for details.</p><pre>$(cat .mcp-honeycomb.json || echo 'Config file not found')</pre></body></html>" > eval/reports/eval-failed.html
+        exit 1
     
     - name: Ensure reports directory exists
       run: mkdir -p eval/reports
