@@ -90,9 +90,14 @@ jobs:
     # Verify the build file exists before running evals
     - name: Verify build file exists
       run: |
+        mkdir -p eval/reports
         if [ ! -f "build/index.mjs" ]; then
           echo "ERROR: build/index.mjs does not exist after build step!"
-          echo "<html><body><h1>Evaluation Failed</h1><p>The MCP build output file does not exist. Check the build step for errors.</p></body></html>" > eval/reports/build-failed.html
+          echo '<!DOCTYPE html>' > eval/reports/build-failed.html
+          echo '<html><head><title>Build Failed</title></head>' >> eval/reports/build-failed.html
+          echo '<body><h1>Evaluation Failed</h1>' >> eval/reports/build-failed.html
+          echo '<p>The MCP build output file does not exist. Check the build step for errors.</p>' >> eval/reports/build-failed.html
+          echo '</body></html>' >> eval/reports/build-failed.html
           exit 1
         else
           echo "Build file found, proceeding with evaluation"
@@ -116,7 +121,22 @@ jobs:
       run: |
         echo "Evaluations failed to run properly!"
         mkdir -p eval/reports
-        echo "<html><body><h1>Evaluation Failed</h1><p>The evaluation process encountered an error. Check the logs for details.</p><pre>$(cat .mcp-honeycomb.json || echo 'Config file not found')</pre></body></html>" > eval/reports/eval-failed.html
+        
+        echo '<!DOCTYPE html>' > eval/reports/eval-failed.html
+        echo '<html><head><title>Evaluation Failed</title></head>' >> eval/reports/eval-failed.html
+        echo '<body><h1>Evaluation Failed</h1>' >> eval/reports/eval-failed.html
+        echo '<p>The evaluation process encountered an error. Check the logs for details.</p>' >> eval/reports/eval-failed.html
+        echo '<h2>Configuration Information</h2>' >> eval/reports/eval-failed.html
+        echo '<pre>' >> eval/reports/eval-failed.html
+        if [ -f .mcp-honeycomb.json ]; then
+          echo "Config file exists but may be invalid. First 100 chars:" >> eval/reports/eval-failed.html
+          head -c 100 .mcp-honeycomb.json >> eval/reports/eval-failed.html
+        else
+          echo "Config file not found!" >> eval/reports/eval-failed.html
+        fi
+        echo '</pre>' >> eval/reports/eval-failed.html
+        echo '</body></html>' >> eval/reports/eval-failed.html
+        
         exit 1
     
     - name: Ensure reports directory exists
@@ -127,7 +147,11 @@ jobs:
         # Check if any HTML reports exist
         if [ -z "$(find eval/reports -name '*.html' 2>/dev/null)" ]; then
           echo "No reports were generated, creating a placeholder"
-          echo "<html><body><h1>No evaluation reports generated</h1><p>This could be due to missing API keys or configuration.</p></body></html>" > eval/reports/no-reports.html
+          echo '<!DOCTYPE html>' > eval/reports/no-reports.html
+          echo '<html><head><title>No Reports</title></head>' >> eval/reports/no-reports.html
+          echo '<body><h1>No evaluation reports generated</h1>' >> eval/reports/no-reports.html
+          echo '<p>This could be due to missing API keys or configuration.</p>' >> eval/reports/no-reports.html
+          echo '</body></html>' >> eval/reports/no-reports.html
         fi
         
     - name: Find latest report
@@ -164,37 +188,39 @@ jobs:
       run: |
         if [ ! -f "eval/reports/index.html" ]; then
           echo "Generating index.html for reports"
-          cat > eval/reports/index.html << EOF
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Honeycomb MCP Evaluation Reports</title>
-            <style>
-              body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-              .container { max-width: 800px; margin: 0 auto; }
-              h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }
-              ul { list-style-type: none; padding: 0; }
-              li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }
-              a { color: #0066cc; text-decoration: none; }
-              a:hover { text-decoration: underline; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Honeycomb MCP Evaluation Reports</h1>
-              <p>Select a report to view:</p>
-              <ul>
-                $(for file in $(find eval/reports -name "*.html" -not -name "index.html" | sort -r); do
-                  filename=$(basename $file)
-                  echo "<li><a href=\"$filename\">$filename</a></li>"
-                done)
-              </ul>
-            </div>
-          </body>
-          </html>
-          EOF
+          
+          echo '<!DOCTYPE html>' > eval/reports/index.html
+          echo '<html>' >> eval/reports/index.html
+          echo '<head>' >> eval/reports/index.html
+          echo '  <meta charset="UTF-8">' >> eval/reports/index.html
+          echo '  <meta name="viewport" content="width=device-width, initial-scale=1.0">' >> eval/reports/index.html
+          echo '  <title>Honeycomb MCP Evaluation Reports</title>' >> eval/reports/index.html
+          echo '  <style>' >> eval/reports/index.html
+          echo '    body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }' >> eval/reports/index.html
+          echo '    .container { max-width: 800px; margin: 0 auto; }' >> eval/reports/index.html
+          echo '    h1 { color: #F5A623; border-bottom: 2px solid #F5A623; padding-bottom: 10px; }' >> eval/reports/index.html
+          echo '    ul { list-style-type: none; padding: 0; }' >> eval/reports/index.html
+          echo '    li { margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee; }' >> eval/reports/index.html
+          echo '    a { color: #0066cc; text-decoration: none; }' >> eval/reports/index.html
+          echo '    a:hover { text-decoration: underline; }' >> eval/reports/index.html
+          echo '  </style>' >> eval/reports/index.html
+          echo '</head>' >> eval/reports/index.html
+          echo '<body>' >> eval/reports/index.html
+          echo '  <div class="container">' >> eval/reports/index.html
+          echo '    <h1>Honeycomb MCP Evaluation Reports</h1>' >> eval/reports/index.html
+          echo '    <p>Select a report to view:</p>' >> eval/reports/index.html
+          echo '    <ul>' >> eval/reports/index.html
+          
+          # Add list items for each report file
+          for file in $(find eval/reports -name "*.html" -not -name "index.html" | sort -r); do
+            filename=$(basename $file)
+            echo "      <li><a href=\"$filename\">$filename</a></li>" >> eval/reports/index.html
+          done
+          
+          echo '    </ul>' >> eval/reports/index.html
+          echo '  </div>' >> eval/reports/index.html
+          echo '</body>' >> eval/reports/index.html
+          echo '</html>' >> eval/reports/index.html
         fi
     
     # Upload evaluation reports as artifacts
