@@ -1,0 +1,22 @@
+{
+  "id": "get-columns-basic",
+  "name": "Get Columns Basic Test",
+  "description": "Tests the basic functionality of the get-columns tool",
+  "tool": "get_columns",
+  "prompt": "Get all columns for the dataset 'frontend' in the Honeycomb environment 'ms-demo'",
+  "parameters": {
+    "environment": "ms-demo",
+    "dataset": "frontend"
+  },
+  "validation": {
+    "prompt": "Evaluate whether the tool response successfully lists columns from the dataset. The response should: 1) Return a non-empty array of columns, 2) Each column should have a name and type property, 3) There should be no errors in the response.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Response contains a non-empty array",
+        "Each column has name and type properties",
+        "No errors present in response"
+      ]
+    }
+  }
+}

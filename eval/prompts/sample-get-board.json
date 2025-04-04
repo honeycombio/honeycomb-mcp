@@ -1,0 +1,22 @@
+{
+  "id": "get-board-basic",
+  "name": "Get Board Basic Test",
+  "description": "Tests the basic functionality of the get-board tool",
+  "tool": "get_board",
+  "prompt": "Get details for the board 'Service Health' with ID 'g1cHDTmjRrA' in the Honeycomb environment 'ms-demo'",
+  "parameters": {
+    "environment": "ms-demo",
+    "boardId": "g1cHDTmjRrA"
+  },
+  "validation": {
+    "prompt": "Evaluate whether the tool response successfully returns board details. The response should: 1) Return an object with board details, 2) The board should have an id, name, and description, 3) There should be no errors in the response.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Response contains a board object",
+        "Board has id, name, and description properties",
+        "No errors present in response"
+      ]
+    }
+  }
+}

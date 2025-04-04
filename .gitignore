@@ -2,3 +2,5 @@ node_modules
 build
 .env
 .mcp-honeycomb.json
+eval/results/
+eval/reports/

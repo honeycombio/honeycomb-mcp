@@ -1,0 +1,24 @@
+{
+  "id": "list-datasets-basic",
+  "name": "List Datasets Basic Test",
+  "description": "Tests the basic functionality of the list-datasets tool",
+  "tool": "list_datasets",
+  "prompt": "List all the datasets in the Honeycomb environment 'ms-demo'",
+  "parameters": {
+    "environment": "ms-demo"
+  },
+  "validation": {
+    "prompt": "Evaluate whether the tool response successfully lists datasets. The response should: 1) Return a non-empty array of datasets, 2) Each dataset should have a name and slug property, 3) There should be no errors in the response.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Response contains a non-empty array",
+        "Each dataset has name and slug properties",
+        "No errors present in response"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 5000
+  }
+}

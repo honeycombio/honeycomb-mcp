@@ -1,0 +1,28 @@
+{
+  "id": "run-query-basic",
+  "name": "Run Query Basic Test",
+  "description": "Tests the basic functionality of the run-query tool with a simple COUNT calculation",
+  "tool": "run_query",
+  "prompt": "Run a simple COUNT query on the 'frontend' dataset in the 'ms-demo' environment for the last hour",
+  "parameters": {
+    "environment": "ms-demo",
+    "dataset": "frontend",
+    "calculations": [
+      {
+        "op": "COUNT"
+      }
+    ],
+    "time_range": 3600
+  },
+  "validation": {
+    "prompt": "Evaluate whether the tool response successfully ran the query. The response should: 1) Return a results array, 2) The results should include at least one data point with a COUNT value, 3) There should be no errors in the response.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Response contains a results array",
+        "Results include at least one data point with COUNT value",
+        "No errors present in response"
+      ]
+    }
+  }
+}
