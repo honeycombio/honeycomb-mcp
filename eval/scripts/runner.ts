@@ -83,12 +83,18 @@ export class EvalRunner {
       
       // Create a StdioClientTransport with the command and args
       // This will handle spawning the process internally
+      // Create a clean environment object with only string values
+      const cleanEnv: Record<string, string> = {};
+      Object.entries(process.env).forEach(([key, value]) => {
+        if (value !== undefined) {
+          cleanEnv[key] = value;
+        }
+      });
+      
       const transport = new StdioClientTransport({
         command,
         args,
-        env: {
-          ...process.env,  // Forward all environment variables including HONEYCOMB_API_KEY
-        }
+        env: cleanEnv  // Forward all environment variables including HONEYCOMB_API_KEY
       });
       
       // Connect to the server
