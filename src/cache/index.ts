@@ -82,6 +82,30 @@ export type ResourceType =
   | 'auth';
 
 // Class to manage caches for different resource types
+/**
+ * Options for paging and filtering cached collections
+ */
+export interface CacheAccessOptions {
+  // Pagination options
+  page?: number;
+  limit?: number;
+  offset?: number;
+  
+  // Filtering options
+  filter?: (item: any) => boolean;
+  search?: {
+    field: string | string[];
+    term: string;
+    caseInsensitive?: boolean;
+  };
+  
+  // Sorting options
+  sort?: {
+    field: string;
+    order?: 'asc' | 'desc';
+  };
+}
+
 export class CacheManager {
   private caches: Map<ResourceType, Cache>;
   private config: CacheConfig;
@@ -211,6 +235,115 @@ export class CacheManager {
     for (const cache of this.caches.values()) {
       cache.flushAll();
     }
+  }
+  
+  /**
+   * Access cached collection with paging, filtering, and sorting
+   * 
+   * This allows tools to page through or search within cached responses
+   * without having to fetch from the API again.
+   * 
+   * @param environment - The environment name
+   * @param resourceType - The type of resource (must be a collection)
+   * @param resourceId - The resource identifier (optional)
+   * @param options - Options for paging, filtering, and sorting
+   * @returns Processed collection based on options, or undefined if not in cache
+   */
+  public accessCollection<T>(
+    environment: string,
+    resourceType: ResourceType,
+    resourceId?: string,
+    options: CacheAccessOptions = {}
+  ): { data: T[], total: number, page?: number, pages?: number } | undefined {
+    // Get the raw cached collection
+    const collection = this.get<T[]>(environment, resourceType, resourceId);
+    if (!collection || !Array.isArray(collection)) return undefined;
+    
+    // Make a copy to avoid modifying the cached data
+    let result = [...collection];
+    
+    // Apply filtering if specified
+    if (options.filter && typeof options.filter === 'function') {
+      result = result.filter(options.filter);
+    }
+    
+    // Apply search if specified
+    if (options.search) {
+      const { field, term, caseInsensitive = true } = options.search;
+      const fields = Array.isArray(field) ? field : [field];
+      const searchTerm = caseInsensitive ? term.toLowerCase() : term;
+      
+      result = result.filter(item => {
+        return fields.some(f => {
+          const value = this.getNestedValue(item, f);
+          if (typeof value === 'string') {
+            const itemValue = caseInsensitive ? value.toLowerCase() : value;
+            return itemValue.includes(searchTerm);
+          }
+          return false;
+        });
+      });
+    }
+    
+    // Get total before pagination
+    const total = result.length;
+    
+    // Apply sorting if specified
+    if (options.sort) {
+      const { field, order = 'asc' } = options.sort;
+      result.sort((a, b) => {
+        const aValue = this.getNestedValue(a, field);
+        const bValue = this.getNestedValue(b, field);
+        
+        // Handle different data types
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return order === 'asc' 
+            ? aValue.localeCompare(bValue) 
+            : bValue.localeCompare(aValue);
+        }
+        
+        // Default numeric comparison
+        return order === 'asc' 
+          ? (aValue > bValue ? 1 : -1) 
+          : (bValue > aValue ? 1 : -1);
+      });
+    }
+    
+    // Apply pagination if specified
+    let page = 1;
+    let pages = 1;
+    
+    if (options.limit) {
+      const limit = options.limit;
+      
+      // Calculate offset based on page or offset parameter
+      let offset = options.offset || 0;
+      if (options.page && options.page > 0) {
+        page = options.page;
+        offset = (page - 1) * limit;
+      }
+      
+      // Calculate total pages
+      pages = Math.ceil(total / limit);
+      
+      // Apply pagination
+      result = result.slice(offset, offset + limit);
+    }
+    
+    return {
+      data: result,
+      total,
+      page,
+      pages
+    };
+  }
+  
+  /**
+   * Helper method to get nested properties from an object
+   * Supports dot notation: "user.address.city"
+   */
+  private getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((o, i) => (o ? o[i] : undefined), obj);
   }
 }
 

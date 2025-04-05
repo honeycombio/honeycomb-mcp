@@ -83,6 +83,17 @@ HONEYCOMB_CACHE_AUTH_TTL=3600      # 1 hour
 HONEYCOMB_CACHE_MAX_SIZE=1000
 ```
 
+#### Advanced Cache Access Features
+
+The caching system includes an intelligent data access layer that allows tools to page through, filter, search, and sort cached resources without additional API calls:
+
+- **Pagination**: Access specific pages of results with configurable page size
+- **Filtering**: Apply custom filter functions to cached collections
+- **Search**: Search for terms across one or more fields (including nested properties)  
+- **Sorting**: Sort cached resources by any field with ascending or descending order
+
+These features make it possible to work with large cached collections efficiently, reducing API usage while providing a more responsive user experience.
+
 ## MCP Configuration
 
 You'll need to run `node` on the location of the build artifact and pass your Honeycomb environment variables:

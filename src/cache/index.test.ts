@@ -148,6 +148,141 @@ describe('CacheManager', () => {
     
     expect(disabledCacheManager.get('prod', 'dataset', 'test-id')).toBeUndefined();
   });
+  
+  describe('accessCollection', () => {
+    beforeEach(() => {
+      // Set up a test collection
+      const testUsers = [
+        { id: 1, name: 'Alice', email: 'alice@example.com', age: 32, metadata: { role: 'admin' } },
+        { id: 2, name: 'Bob', email: 'bob@example.com', age: 28, metadata: { role: 'user' } },
+        { id: 3, name: 'Charlie', email: 'charlie@example.com', age: 45, metadata: { role: 'user' } },
+        { id: 4, name: 'David', email: 'david@example.com', age: 22, metadata: { role: 'user' } },
+        { id: 5, name: 'Eve', email: 'eve@example.com', age: 38, metadata: { role: 'manager' } },
+      ];
+      
+      cacheManager.set('test', 'dataset', testUsers, 'users');
+    });
+    
+    it('should return undefined for non-existent collections', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'non-existent');
+      expect(result).toBeUndefined();
+    });
+    
+    it('should return all items when no options are provided', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users');
+      expect(result).toBeDefined();
+      expect(result?.data.length).toBe(5);
+      expect(result?.total).toBe(5);
+    });
+    
+    it('should support pagination', () => {
+      const page1 = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        page: 1, 
+        limit: 2 
+      });
+      
+      expect(page1?.data.length).toBe(2);
+      expect(page1?.total).toBe(5);
+      expect(page1?.page).toBe(1);
+      expect(page1?.pages).toBe(3);
+      expect(page1?.data[0].name).toBe('Alice');
+      
+      const page2 = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        page: 2, 
+        limit: 2 
+      });
+      
+      expect(page2?.data.length).toBe(2);
+      expect(page2?.data[0].name).toBe('Charlie');
+      
+      const page3 = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        page: 3, 
+        limit: 2 
+      });
+      
+      expect(page3?.data.length).toBe(1);
+      expect(page3?.data[0].name).toBe('Eve');
+    });
+    
+    it('should support filtering with a function', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        filter: (user) => user.age > 30 
+      });
+      
+      expect(result?.data.length).toBe(3);
+      expect(result?.data[0].name).toBe('Alice');
+      expect(result?.data[1].name).toBe('Charlie');
+      expect(result?.data[2].name).toBe('Eve');
+    });
+    
+    it('should support searching by string fields', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        search: {
+          field: 'name',
+          term: 'li',  // Should match "Alice" and "Charlie"
+        } 
+      });
+      
+      expect(result?.data.length).toBe(2);
+      expect(result?.data[0].name).toBe('Alice');
+      expect(result?.data[1].name).toBe('Charlie');
+    });
+    
+    it('should support searching across multiple fields', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        search: {
+          field: ['name', 'email'],
+          term: 'e',  // Should match several users
+        } 
+      });
+      
+      expect(result?.data.length).toBe(5); // All users have 'e' in name or email
+    });
+    
+    it('should support searching nested fields', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        search: {
+          field: 'metadata.role',
+          term: 'admin',
+        } 
+      });
+      
+      expect(result?.data.length).toBe(1);
+      expect(result?.data[0].name).toBe('Alice');
+    });
+    
+    it('should support sorting', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
+        sort: {
+          field: 'age',
+          order: 'desc'
+        } 
+      });
+      
+      expect(result?.data.length).toBe(5);
+      expect(result?.data[0].name).toBe('Charlie');  // Age 45
+      expect(result?.data[4].name).toBe('David');    // Age 22
+    });
+    
+    it('should support combining options', () => {
+      const result = cacheManager.accessCollection('test', 'dataset', 'users', {
+        filter: (user) => user.age > 25,
+        sort: {
+          field: 'age',
+          order: 'asc'
+        },
+        page: 1,
+        limit: 2
+      });
+      
+      expect(result?.data.length).toBe(2);
+      expect(result?.total).toBe(4);  // 4 users with age > 25
+      expect(result?.page).toBe(1);
+      expect(result?.pages).toBe(2);
+      expect(result?.data[0].name).toBe('Bob');     // Age 28
+      expect(result?.data[1].name).toBe('Alice');   // Age 32
+    });
+  });
 });
 
 describe('initializeCache', () => {
