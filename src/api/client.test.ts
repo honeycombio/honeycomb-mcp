@@ -3,6 +3,7 @@ import { HoneycombAPI } from "./client.js";
 import { Config, Environment } from "../config.js";
 import { HoneycombError } from "../utils/errors.js";
 import { Column } from "../types/column.js";
+import { initializeCache } from "../cache/index.js";
 
 // Mock fetch globally
 const fetchMock = vi.fn();
@@ -26,9 +27,27 @@ describe("HoneycombAPI", () => {
         permissions: { query: true, read_datasets: true, read_boards: true }
       },
     ],
+    cache: {
+      defaultTTL: 300,
+      ttl: {
+        dataset: 900,
+        column: 900,
+        board: 900,
+        slo: 900,
+        trigger: 900,
+        marker: 900,
+        recipient: 900,
+        auth: 3600
+      },
+      enabled: true,
+      maxSize: 1000
+    }
   };
 
   beforeEach(() => {
+    // Initialize cache before creating API client
+    initializeCache(testConfig);
+    
     api = new HoneycombAPI(testConfig);
     fetchMock.mockReset();
     

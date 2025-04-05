@@ -6,6 +6,7 @@ import process from "node:process";
 import { registerResources } from "./resources/index.js";
 import { registerTools } from "./tools/index.js";
 import { registerPrompts } from "./prompts/index.js";
+import { initializeCache } from "./cache/index.js";
 
 /**
  * Main function to run the Honeycomb MCP server
@@ -16,6 +17,11 @@ async function main() {
     console.error("Loading configuration from environment variables...");
     const config = await loadConfig();
     console.error(`Loaded ${config.environments.length} environment(s): ${config.environments.map(e => e.name).join(', ')}`);
+    
+    // Initialize the cache
+    console.error("Initializing cache...");
+    const cacheManager = initializeCache(config);
+    console.error(`Cache initialized (enabled: ${config.cache.enabled})`);
     
     const api = new HoneycombAPI(config);
 

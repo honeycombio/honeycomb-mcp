@@ -24,3 +24,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Type Validation**: Use Zod schemas for validating external data
 - **API Design**: Methods should be focused with clear parameters and return types
 - **Documentation**: Add comments for complex operations and public methods
+- **Caching**: Use `@stacksjs/ts-cache` for resource caching; normalize keys as `environment:resource:id`

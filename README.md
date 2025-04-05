@@ -58,6 +58,31 @@ You can also set an optional API endpoint (e.g., for Honeycomb EU customers):
 HONEYCOMB_API_ENDPOINT=https://api.eu1.honeycomb.io/
 ```
 
+### Caching Configuration
+
+The MCP server implements caching for all non-query Honeycomb API calls to improve performance and reduce API usage. Caching can be configured using these environment variables:
+
+```bash
+# Enable/disable caching (default: true)
+HONEYCOMB_CACHE_ENABLED=true
+
+# Default TTL in seconds (default: 300)
+HONEYCOMB_CACHE_DEFAULT_TTL=300
+
+# Resource-specific TTL values in seconds (defaults shown)
+HONEYCOMB_CACHE_DATASET_TTL=900    # 15 minutes
+HONEYCOMB_CACHE_COLUMN_TTL=900     # 15 minutes
+HONEYCOMB_CACHE_BOARD_TTL=900      # 15 minutes
+HONEYCOMB_CACHE_SLO_TTL=900        # 15 minutes
+HONEYCOMB_CACHE_TRIGGER_TTL=900    # 15 minutes
+HONEYCOMB_CACHE_MARKER_TTL=900     # 15 minutes
+HONEYCOMB_CACHE_RECIPIENT_TTL=900  # 15 minutes
+HONEYCOMB_CACHE_AUTH_TTL=3600      # 1 hour
+
+# Maximum cache size (items per resource type)
+HONEYCOMB_CACHE_MAX_SIZE=1000
+```
+
 ## MCP Configuration
 
 You'll need to run `node` on the location of the build artifact and pass your Honeycomb environment variables:
@@ -120,6 +145,7 @@ It will likely work with other clients.
 - Analyze columns and data patterns
 - View and analyze Triggers
 - Access dataset metadata and schema information
+- Optimized performance with TTL-based caching for all non-query API calls
 
 #### Resources
 

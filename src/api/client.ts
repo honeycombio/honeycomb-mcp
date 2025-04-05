@@ -16,12 +16,13 @@ import { Marker, MarkersResponse } from "../types/marker.js";
 import { Recipient, RecipientsResponse } from "../types/recipient.js";
 import { Config, Environment } from "../config.js";
 import { QueryError } from "../utils/errors.js";
+import { getCache, ResourceType } from "../cache/index.js";
 
 export class HoneycombAPI {
   private environments: Map<string, Environment>;
   private defaultApiEndpoint = "https://api.honeycomb.io";
-  // Cache for auth responses to avoid repeated API calls
-  private authCache: Map<string, AuthResponse> = new Map();
+  private userAgent = "@honeycombio/honeycomb-mcp/0.0.1";
+  // Using the centralized cache system instead of a local Map
 
   constructor(config: Config) {
     this.environments = new Map(
@@ -55,15 +56,20 @@ export class HoneycombAPI {
    * @returns Auth response with team and environment details
    */
   async getAuthInfo(environment: string): Promise<AuthResponse> {
+    // Get cache instance
+    const cache = getCache();
+    
     // Check cache first
-    if (this.authCache.has(environment)) {
-      return this.authCache.get(environment)!;
+    const cachedAuthInfo = cache.get<AuthResponse>(environment, 'auth');
+    if (cachedAuthInfo) {
+      return cachedAuthInfo;
     }
     
     try {
       const authInfo = await this.requestWithRetry<AuthResponse>(environment, "/1/auth");
+      
       // Cache the result
-      this.authCache.set(environment, authInfo);
+      cache.set<AuthResponse>(environment, 'auth', authInfo);
       
       // Update the environment with auth info if not already populated
       const env = this.environments.get(environment);
@@ -152,6 +158,7 @@ export class HoneycombAPI {
       headers: {
         "X-Honeycomb-Team": apiKey,
         "Content-Type": "application/json",
+        "User-Agent": this.userAgent,
         ...options.headers,
       },
     });
@@ -241,11 +248,45 @@ export class HoneycombAPI {
 
   // Dataset methods
   async getDataset(environment: string, datasetSlug: string): Promise<Dataset> {
-    return this.requestWithRetry(environment, `/1/datasets/${datasetSlug}`);
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedDataset = cache.get<Dataset>(environment, 'dataset', datasetSlug);
+    if (cachedDataset) {
+      return cachedDataset;
+    }
+    
+    // Fetch from API if not in cache
+    const dataset = await this.requestWithRetry<Dataset>(
+      environment, 
+      `/1/datasets/${datasetSlug}`
+    );
+    
+    // Cache the result
+    cache.set<Dataset>(environment, 'dataset', dataset, datasetSlug);
+    
+    return dataset;
   }
 
   async listDatasets(environment: string): Promise<Dataset[]> {
-    return this.requestWithRetry(environment, "/1/datasets");
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedDatasets = cache.get<Dataset[]>(environment, 'dataset');
+    if (cachedDatasets) {
+      return cachedDatasets;
+    }
+    
+    // Fetch from API if not in cache
+    const datasets = await this.requestWithRetry<Dataset[]>(
+      environment, 
+      "/1/datasets"
+    );
+    
+    // Cache the result
+    cache.set<Dataset[]>(environment, 'dataset', datasets);
+    
+    return datasets;
   }
 
   // Query methods
@@ -351,7 +392,25 @@ export class HoneycombAPI {
     environment: string,
     datasetSlug: string,
   ): Promise<Column[]> {
-    return this.requestWithRetry(environment, `/1/columns/${datasetSlug}`);
+    const cache = getCache();
+    const cacheKey = `${datasetSlug}:all`;
+    
+    // Check cache first
+    const cachedColumns = cache.get<Column[]>(environment, 'column', cacheKey);
+    if (cachedColumns) {
+      return cachedColumns;
+    }
+    
+    // Fetch from API if not in cache
+    const columns = await this.requestWithRetry<Column[]>(
+      environment, 
+      `/1/columns/${datasetSlug}`
+    );
+    
+    // Cache the result
+    cache.set<Column[]>(environment, 'column', columns, cacheKey);
+    
+    return columns;
   }
 
   async getColumnByName(
@@ -359,10 +418,25 @@ export class HoneycombAPI {
     datasetSlug: string,
     keyName: string,
   ): Promise<Column> {
-    return this.requestWithRetry(
+    const cache = getCache();
+    const cacheKey = `${datasetSlug}:${keyName}`;
+    
+    // Check cache first
+    const cachedColumn = cache.get<Column>(environment, 'column', cacheKey);
+    if (cachedColumn) {
+      return cachedColumn;
+    }
+    
+    // Fetch from API if not in cache
+    const column = await this.requestWithRetry<Column>(
       environment,
       `/1/columns/${datasetSlug}?key_name=${encodeURIComponent(keyName)}`,
     );
+    
+    // Cache the result
+    cache.set<Column>(environment, 'column', column, cacheKey);
+    
+    return column;
   }
 
   async getVisibleColumns(
@@ -491,7 +565,25 @@ export class HoneycombAPI {
   }
 
   async getSLOs(environment: string, datasetSlug: string): Promise<SLO[]> {
-    return this.requestWithRetry<SLO[]>(environment, `/1/slos/${datasetSlug}`);
+    const cache = getCache();
+    const cacheKey = datasetSlug;
+    
+    // Check cache first
+    const cachedSLOs = cache.get<SLO[]>(environment, 'slo', cacheKey);
+    if (cachedSLOs) {
+      return cachedSLOs;
+    }
+    
+    // Fetch from API if not in cache
+    const slos = await this.requestWithRetry<SLO[]>(
+      environment, 
+      `/1/slos/${datasetSlug}`
+    );
+    
+    // Cache the result
+    cache.set<SLO[]>(environment, 'slo', slos, cacheKey);
+    
+    return slos;
   }
 
   async getSLO(
@@ -499,21 +591,51 @@ export class HoneycombAPI {
     datasetSlug: string,
     sloId: string,
   ): Promise<SLODetailedResponse> {
-    return this.requestWithRetry<SLODetailedResponse>(
+    const cache = getCache();
+    const cacheKey = `${datasetSlug}:${sloId}`;
+    
+    // Check cache first
+    const cachedSLO = cache.get<SLODetailedResponse>(environment, 'slo', cacheKey);
+    if (cachedSLO) {
+      return cachedSLO;
+    }
+    
+    // Fetch from API if not in cache
+    const slo = await this.requestWithRetry<SLODetailedResponse>(
       environment,
       `/1/slos/${datasetSlug}/${sloId}`,
       { params: { detailed: true } },
     );
+    
+    // Cache the result
+    cache.set<SLODetailedResponse>(environment, 'slo', slo, cacheKey);
+    
+    return slo;
   }
 
   async getTriggers(
     environment: string,
     datasetSlug: string,
   ): Promise<TriggerResponse[]> {
-    return this.requestWithRetry<TriggerResponse[]>(
+    const cache = getCache();
+    const cacheKey = datasetSlug;
+    
+    // Check cache first
+    const cachedTriggers = cache.get<TriggerResponse[]>(environment, 'trigger', cacheKey);
+    if (cachedTriggers) {
+      return cachedTriggers;
+    }
+    
+    // Fetch from API if not in cache
+    const triggers = await this.requestWithRetry<TriggerResponse[]>(
       environment,
       `/1/triggers/${datasetSlug}`,
     );
+    
+    // Cache the result
+    cache.set<TriggerResponse[]>(environment, 'trigger', triggers, cacheKey);
+    
+    return triggers;
   }
 
   async getTrigger(
@@ -521,30 +643,57 @@ export class HoneycombAPI {
     datasetSlug: string,
     triggerId: string,
   ): Promise<TriggerResponse> {
-    return this.requestWithRetry<TriggerResponse>(
+    const cache = getCache();
+    const cacheKey = `${datasetSlug}:${triggerId}`;
+    
+    // Check cache first
+    const cachedTrigger = cache.get<TriggerResponse>(environment, 'trigger', cacheKey);
+    if (cachedTrigger) {
+      return cachedTrigger;
+    }
+    
+    // Fetch from API if not in cache
+    const trigger = await this.requestWithRetry<TriggerResponse>(
       environment,
       `/1/triggers/${datasetSlug}/${triggerId}`,
     );
+    
+    // Cache the result
+    cache.set<TriggerResponse>(environment, 'trigger', trigger, cacheKey);
+    
+    return trigger;
   }
 
   // Board methods
   async getBoards(environment: string): Promise<Board[]> {
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedBoards = cache.get<Board[]>(environment, 'board');
+    if (cachedBoards) {
+      return cachedBoards;
+    }
+    
     try {
       // Make the request to the boards endpoint
       const response = await this.requestWithRetry<any>(environment, "/1/boards");
       
+      // Process the response based on its format
+      let boards: Board[] = [];
+      
       // Check if response is already an array (API might return array directly)
       if (Array.isArray(response)) {
-        return response;
+        boards = response;
       }
-      
       // Check if response has a boards property (expected structure)
-      if (response && response.boards && Array.isArray(response.boards)) {
-        return response.boards;
+      else if (response && response.boards && Array.isArray(response.boards)) {
+        boards = response.boards;
       }
       
-      // If we get here, the response doesn't match either expected format
-      return [];
+      // Cache the result
+      cache.set<Board[]>(environment, 'board', boards);
+      
+      return boards;
     } catch (error) {
       // Return empty array instead of throwing to prevent breaking the application
       return [];
@@ -552,26 +701,109 @@ export class HoneycombAPI {
   }
 
   async getBoard(environment: string, boardId: string): Promise<Board> {
-    return this.requestWithRetry<Board>(environment, `/1/boards/${boardId}`);
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedBoard = cache.get<Board>(environment, 'board', boardId);
+    if (cachedBoard) {
+      return cachedBoard;
+    }
+    
+    // Fetch from API if not in cache
+    const board = await this.requestWithRetry<Board>(
+      environment, 
+      `/1/boards/${boardId}`
+    );
+    
+    // Cache the result
+    cache.set<Board>(environment, 'board', board, boardId);
+    
+    return board;
   }
 
   // Marker methods
   async getMarkers(environment: string): Promise<Marker[]> {
-    const response = await this.requestWithRetry<MarkersResponse>(environment, "/1/markers");
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedMarkers = cache.get<Marker[]>(environment, 'marker');
+    if (cachedMarkers) {
+      return cachedMarkers;
+    }
+    
+    // Fetch from API if not in cache
+    const response = await this.requestWithRetry<MarkersResponse>(
+      environment, 
+      "/1/markers"
+    );
+    
+    // Cache the result
+    cache.set<Marker[]>(environment, 'marker', response.markers);
+    
     return response.markers;
   }
 
   async getMarker(environment: string, markerId: string): Promise<Marker> {
-    return this.requestWithRetry<Marker>(environment, `/1/markers/${markerId}`);
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedMarker = cache.get<Marker>(environment, 'marker', markerId);
+    if (cachedMarker) {
+      return cachedMarker;
+    }
+    
+    // Fetch from API if not in cache
+    const marker = await this.requestWithRetry<Marker>(
+      environment, 
+      `/1/markers/${markerId}`
+    );
+    
+    // Cache the result
+    cache.set<Marker>(environment, 'marker', marker, markerId);
+    
+    return marker;
   }
 
   // Recipient methods
   async getRecipients(environment: string): Promise<Recipient[]> {
-    const response = await this.requestWithRetry<RecipientsResponse>(environment, "/1/recipients");
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedRecipients = cache.get<Recipient[]>(environment, 'recipient');
+    if (cachedRecipients) {
+      return cachedRecipients;
+    }
+    
+    // Fetch from API if not in cache
+    const response = await this.requestWithRetry<RecipientsResponse>(
+      environment, 
+      "/1/recipients"
+    );
+    
+    // Cache the result
+    cache.set<Recipient[]>(environment, 'recipient', response.recipients);
+    
     return response.recipients;
   }
 
   async getRecipient(environment: string, recipientId: string): Promise<Recipient> {
-    return this.requestWithRetry<Recipient>(environment, `/1/recipients/${recipientId}`);
+    const cache = getCache();
+    
+    // Check cache first
+    const cachedRecipient = cache.get<Recipient>(environment, 'recipient', recipientId);
+    if (cachedRecipient) {
+      return cachedRecipient;
+    }
+    
+    // Fetch from API if not in cache
+    const recipient = await this.requestWithRetry<Recipient>(
+      environment, 
+      `/1/recipients/${recipientId}`
+    );
+    
+    // Cache the result
+    cache.set<Recipient>(environment, 'recipient', recipient, recipientId);
+    
+    return recipient;
   }
 }

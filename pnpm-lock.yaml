@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
+      '@stacksjs/ts-cache':
+        specifier: 0.1.2
+        version: 0.1.2
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -365,6 +368,9 @@ packages:
     resolution: {integrity: sha512-yAkUOkIKZlK5dl7u6dg897doBgLXmUHhIINM2c+sND3DZwnrdQkkSiDh7N75Ll4mM4dxSkYfXqU9fW3lLkMFug==}
     cpu: [x64]
     os: [win32]
+
+  '@stacksjs/ts-cache@0.1.2':
+    resolution: {integrity: sha512-dSmJO2+pN4xkARQLT9OHEfqisqbT+FqsW9+GNubWeKCAJE+pHv4Cd1kNTyRd4Dzp4JX8JedLAjHKjXQsiUT41Q==}
 
   '@total-typescript/tsconfig@1.0.4':
     resolution: {integrity: sha512-fO4ctMPGz1kOFOQ4RCPBRBfMy3gDn+pegUfrGyUFRMv/Rd0ZM3/SHH3hFCYG4u6bPLG8OlmOGcBLDexvyr3A5w==}
@@ -1394,6 +1400,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.39.0':
     optional: true
+
+  '@stacksjs/ts-cache@0.1.2': {}
 
   '@total-typescript/tsconfig@1.0.4': {}
 

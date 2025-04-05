@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthResponse } from "./types/api.js";
+import { CacheConfigSchema } from "./cache/index.js";
 
 // Enhanced environment schema with authentication information
 export const EnvironmentSchema = z.object({
@@ -15,6 +16,7 @@ export const EnvironmentSchema = z.object({
 
 export const ConfigSchema = z.object({
   environments: z.array(EnvironmentSchema).min(1, "At least one environment must be configured"),
+  cache: CacheConfigSchema,
 });
 
 export type Environment = z.infer<typeof EnvironmentSchema>;
@@ -61,7 +63,25 @@ async function loadFromEnvVars(): Promise<Config> {
     );
   }
 
-  return { environments };
+  // Default cache configuration
+  return { 
+    environments,
+    cache: {
+      defaultTTL: 300,
+      ttl: {
+        dataset: 900,
+        column: 900,
+        board: 900,
+        slo: 900,
+        trigger: 900,
+        marker: 900,
+        recipient: 900,
+        auth: 3600
+      },
+      enabled: true,
+      maxSize: 1000
+    }
+  };
 }
 
 /**
@@ -105,7 +125,10 @@ async function enhanceConfigWithAuth(config: Config): Promise<Config> {
     }
   }
 
-  return { environments: enhancedEnvironments };
+  return { 
+    environments: enhancedEnvironments,
+    cache: config.cache
+  };
 }
 
 /**
@@ -118,7 +141,27 @@ export async function loadConfig(): Promise<Config> {
     const config = await loadFromEnvVars();
     
     // Enhance with auth information
-    return await enhanceConfigWithAuth(config);
+    const enhancedConfig = await enhanceConfigWithAuth(config);
+    
+    // Add cache configuration (default values will be used if not specified)
+    return {
+      ...enhancedConfig,
+      cache: {
+        enabled: process.env.HONEYCOMB_CACHE_ENABLED !== 'false',
+        defaultTTL: parseInt(process.env.HONEYCOMB_CACHE_DEFAULT_TTL || '300', 10),
+        ttl: {
+          dataset: parseInt(process.env.HONEYCOMB_CACHE_DATASET_TTL || '900', 10),
+          column: parseInt(process.env.HONEYCOMB_CACHE_COLUMN_TTL || '900', 10),
+          board: parseInt(process.env.HONEYCOMB_CACHE_BOARD_TTL || '900', 10),
+          slo: parseInt(process.env.HONEYCOMB_CACHE_SLO_TTL || '900', 10),
+          trigger: parseInt(process.env.HONEYCOMB_CACHE_TRIGGER_TTL || '900', 10),
+          marker: parseInt(process.env.HONEYCOMB_CACHE_MARKER_TTL || '900', 10),
+          recipient: parseInt(process.env.HONEYCOMB_CACHE_RECIPIENT_TTL || '900', 10),
+          auth: parseInt(process.env.HONEYCOMB_CACHE_AUTH_TTL || '3600', 10),
+        },
+        maxSize: parseInt(process.env.HONEYCOMB_CACHE_MAX_SIZE || '1000', 10),
+      }
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const issues = error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
@@ -127,7 +170,12 @@ export async function loadConfig(): Promise<Config> {
         `- HONEYCOMB_API_KEY=your_api_key (for single environment)\n` +
         `- HONEYCOMB_ENV_PROD_API_KEY=your_prod_api_key (for multiple environments)\n` +
         `- HONEYCOMB_ENV_STAGING_API_KEY=your_staging_api_key\n` +
-        `- HONEYCOMB_API_ENDPOINT=https://api.honeycomb.io (optional, to override default)`
+        `- HONEYCOMB_API_ENDPOINT=https://api.honeycomb.io (optional, to override default)\n` +
+        `\nOptional cache configuration:\n` +
+        `- HONEYCOMB_CACHE_ENABLED=true (set to 'false' to disable caching)\n` +
+        `- HONEYCOMB_CACHE_DEFAULT_TTL=300 (default TTL in seconds)\n` +
+        `- HONEYCOMB_CACHE_DATASET_TTL=900 (TTL for dataset resources)\n` +
+        `- HONEYCOMB_CACHE_MAX_SIZE=1000 (maximum number of items in each cache)`
       );
     }
     throw error;
