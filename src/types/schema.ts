@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+/**
+* Schema for pagination, filtering, and sorting options
+*/
+ export const PaginationSchema = z.object({
+  page: z.number().optional().describe("Page number (1-based)"),
+  limit: z.number().optional().describe("Number of items per page"),
+  sort_by: z.string().optional().describe("Field to sort by"),
+  sort_order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
+  search: z.string().optional().describe("Search term to filter results"),
+  search_fields: z.union([
+    z.string(),
+    z.array(z.string())
+  ]).optional().describe("Fields to search in (string or array of strings)"),
+});
+
 // Base schema for dataset arguments
 export const DatasetArgumentsBaseSchema = z.object({
   environment: z.string(),
@@ -19,6 +34,14 @@ export const ColumnInfoSchema = z.object({
   type: z.enum(["string", "float", "integer", "boolean"]).optional(),
   includeHidden: z.boolean().optional().default(false),
 });
+
+/**
+ * Schema for listing columns in a dataset
+ */
+export const ListColumnsSchema = z.object({
+  environment: z.string().describe("The Honeycomb environment"),
+  dataset: z.string().describe("The dataset to fetch columns from"),
+}).merge(PaginationSchema);
 
 // Input validation schemas using zod
 export const QueryInputSchema = z.object({
@@ -283,20 +306,7 @@ export const ConfigSchema = z.object({
   datasets: z.array(DatasetConfigSchema),
 });
 
-/**
- * Schema for pagination, filtering, and sorting options
- */
-export const PaginationSchema = z.object({
-  page: z.number().optional().describe("Page number (1-based)"),
-  limit: z.number().optional().describe("Number of items per page"),
-  sort_by: z.string().optional().describe("Field to sort by"),
-  sort_order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
-  search: z.string().optional().describe("Search term to filter results"),
-  search_fields: z.union([
-    z.string(), 
-    z.array(z.string())
-  ]).optional().describe("Fields to search in (string or array of strings)"),
-});
+// PaginationSchema is already defined above
 
 /**
  * Schema for listing boards

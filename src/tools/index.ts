@@ -1,6 +1,6 @@
 import { HoneycombAPI } from "../api/client.js";
 import { createListDatasetsTool } from "./list-datasets.js";
-import { createGetColumnsTool } from "./get-columns.js";
+import { createListColumnsTool } from "./list-columns.js";
 import { createRunQueryTool } from "./run-query.js";
 import { createAnalyzeColumnTool } from "./analyze-column.js";
 import { createListBoardsTool } from "./list-boards.js";
@@ -26,7 +26,7 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
   const tools = [
     // Dataset tools
     createListDatasetsTool(api),
-    createGetColumnsTool(api),
+    createListColumnsTool(api),
 
     // Query tools
     createRunQueryTool(api),

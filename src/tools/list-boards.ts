@@ -189,9 +189,11 @@ export function createListBoardsTool(api: HoneycombAPI) {
           };
         }
         
-        // Format the cached result
+        // Format the cached result and type-cast the unknown data
+        const typedData = result.data as typeof simplifiedBoards;
+        
         const paginatedResponse: PaginatedResponse<typeof simplifiedBoards[0]> = {
-          data: result.data,
+          data: typedData,
           metadata: {
             total: result.total,
             page: result.page || 1,

@@ -154,6 +154,10 @@ export function createListDatasetsTool(api: HoneycombAPI) {
                   : bValue.localeCompare(aValue);
               }
               
+              // Null-safe comparison for nullable values
+              if (aValue === null || aValue === undefined) return order === 'asc' ? -1 : 1;
+              if (bValue === null || bValue === undefined) return order === 'asc' ? 1 : -1;
+              
               return order === 'asc' 
                 ? (aValue > bValue ? 1 : -1) 
                 : (bValue > aValue ? 1 : -1);
@@ -188,9 +192,11 @@ export function createListDatasetsTool(api: HoneycombAPI) {
           };
         }
         
-        // Format the cached result
+        // Format the cached result and type-cast the unknown data
+        const typedData = result.data as typeof simplifiedDatasets;
+        
         const paginatedResponse: PaginatedResponse<typeof simplifiedDatasets[0]> = {
-          data: result.data,
+          data: typedData,
           metadata: {
             total: result.total,
             page: result.page || 1,

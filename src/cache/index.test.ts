@@ -185,7 +185,7 @@ describe('CacheManager', () => {
       expect(page1?.total).toBe(5);
       expect(page1?.page).toBe(1);
       expect(page1?.pages).toBe(3);
-      expect(page1?.data[0].name).toBe('Alice');
+      expect((page1?.data[0] as any).name).toBe('Alice');
       
       const page2 = cacheManager.accessCollection('test', 'dataset', 'users', { 
         page: 2, 
@@ -193,7 +193,7 @@ describe('CacheManager', () => {
       });
       
       expect(page2?.data.length).toBe(2);
-      expect(page2?.data[0].name).toBe('Charlie');
+      expect((page2?.data[0] as any).name).toBe('Charlie');
       
       const page3 = cacheManager.accessCollection('test', 'dataset', 'users', { 
         page: 3, 
@@ -201,18 +201,18 @@ describe('CacheManager', () => {
       });
       
       expect(page3?.data.length).toBe(1);
-      expect(page3?.data[0].name).toBe('Eve');
+      expect((page3?.data[0] as any).name).toBe('Eve');
     });
     
     it('should support filtering with a function', () => {
       const result = cacheManager.accessCollection('test', 'dataset', 'users', { 
-        filter: (user) => user.age > 30 
+        filter: (user: any) => user.age > 30 
       });
       
       expect(result?.data.length).toBe(3);
-      expect(result?.data[0].name).toBe('Alice');
-      expect(result?.data[1].name).toBe('Charlie');
-      expect(result?.data[2].name).toBe('Eve');
+      expect((result?.data[0] as any).name).toBe('Alice');
+      expect((result?.data[1] as any).name).toBe('Charlie');
+      expect((result?.data[2] as any).name).toBe('Eve');
     });
     
     it('should support searching by string fields', () => {
@@ -224,8 +224,8 @@ describe('CacheManager', () => {
       });
       
       expect(result?.data.length).toBe(2);
-      expect(result?.data[0].name).toBe('Alice');
-      expect(result?.data[1].name).toBe('Charlie');
+      expect((result?.data[0] as any).name).toBe('Alice');
+      expect((result?.data[1] as any).name).toBe('Charlie');
     });
     
     it('should support searching across multiple fields', () => {
@@ -248,7 +248,7 @@ describe('CacheManager', () => {
       });
       
       expect(result?.data.length).toBe(1);
-      expect(result?.data[0].name).toBe('Alice');
+      expect((result?.data[0] as any).name).toBe('Alice');
     });
     
     it('should support sorting', () => {
@@ -260,13 +260,13 @@ describe('CacheManager', () => {
       });
       
       expect(result?.data.length).toBe(5);
-      expect(result?.data[0].name).toBe('Charlie');  // Age 45
-      expect(result?.data[4].name).toBe('David');    // Age 22
+      expect((result?.data[0] as any).name).toBe('Charlie');  // Age 45
+      expect((result?.data[4] as any).name).toBe('David');    // Age 22
     });
     
     it('should support combining options', () => {
       const result = cacheManager.accessCollection('test', 'dataset', 'users', {
-        filter: (user) => user.age > 25,
+        filter: (user: any) => user.age > 25,
         sort: {
           field: 'age',
           order: 'asc'
@@ -279,8 +279,8 @@ describe('CacheManager', () => {
       expect(result?.total).toBe(4);  // 4 users with age > 25
       expect(result?.page).toBe(1);
       expect(result?.pages).toBe(2);
-      expect(result?.data[0].name).toBe('Bob');     // Age 28
-      expect(result?.data[1].name).toBe('Alice');   // Age 32
+      expect((result?.data[0] as any).name).toBe('Bob');     // Age 28
+      expect((result?.data[1] as any).name).toBe('Alice');   // Age 32
     });
   });
 });
