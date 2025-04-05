@@ -85,7 +85,10 @@ export class EvalRunner {
       // This will handle spawning the process internally
       const transport = new StdioClientTransport({
         command,
-        args
+        args,
+        env: {
+          ...process.env,  // Forward all environment variables including HONEYCOMB_API_KEY
+        }
       });
       
       // Connect to the server

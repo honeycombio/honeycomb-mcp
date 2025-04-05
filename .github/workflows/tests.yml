@@ -134,9 +134,14 @@ jobs:
           echo "Honeycomb API key is set (length: ${#HONEYCOMB_API_KEY})" >> eval/reports/eval-failed.html
         else
           echo "Honeycomb API key is not set!" >> eval/reports/eval-failed.html
+          echo "Make sure HONEYCOMB_API_KEY is set in GitHub secrets and passed to the workflow" >> eval/reports/eval-failed.html
         fi
         echo '</pre>' >> eval/reports/eval-failed.html
         echo '</body></html>' >> eval/reports/eval-failed.html
+        
+        # Print environment variables (excluding secrets) for debugging
+        echo "Environment variables for debugging:"
+        env | grep -v -E "HONEYCOMB_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY" | sort
         
         exit 1
     
