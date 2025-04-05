@@ -79,3 +79,33 @@ export interface QueryOptions {
   includeSeries?: boolean;
   limit?: number;
 }
+
+/**
+ * Standard pagination, filtering, and sorting options for collection tools
+ */
+export interface CollectionOptions {
+  // Pagination options
+  page?: number;
+  limit?: number;
+  
+  // Sorting options
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  
+  // Search options
+  search?: string;
+  search_fields?: string | string[];
+}
+
+/**
+ * Response format for paginated collection data
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  metadata: {
+    total: number;
+    page: number;
+    pages: number;
+    limit: number;
+  };
+}
