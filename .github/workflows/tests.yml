@@ -82,10 +82,8 @@ jobs:
     - name: Build project for evaluation
       run: pnpm run build
     
-    - name: Create MCP config
-      run: |
-        echo '${{ secrets.MCP_CONFIG }}' > .mcp-honeycomb.json
-        echo "Created MCP config file"
+    - name: Configure MCP environment
+      run: echo "Using environment variable-based configuration"
     
     # Verify the build file exists before running evals
     - name: Verify build file exists
@@ -110,6 +108,8 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        # Use Honeycomb API key for environment variable-based config
+        HONEYCOMB_API_KEY: ${{ secrets.HONEYCOMB_API_KEY }}
         # Use only limited models for CI to save costs
         EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
         EVAL_CONCURRENCY: 2
@@ -130,11 +130,10 @@ jobs:
         echo '<p>The evaluation process encountered an error. Check the logs for details.</p>' >> eval/reports/eval-failed.html
         echo '<h2>Configuration Information</h2>' >> eval/reports/eval-failed.html
         echo '<pre>' >> eval/reports/eval-failed.html
-        if [ -f .mcp-honeycomb.json ]; then
-          echo "Config file exists but may be invalid. First 100 chars:" >> eval/reports/eval-failed.html
-          head -c 100 .mcp-honeycomb.json >> eval/reports/eval-failed.html
+        if [ -n "$HONEYCOMB_API_KEY" ]; then
+          echo "Honeycomb API key is set (length: ${#HONEYCOMB_API_KEY})" >> eval/reports/eval-failed.html
         else
-          echo "Config file not found!" >> eval/reports/eval-failed.html
+          echo "Honeycomb API key is not set!" >> eval/reports/eval-failed.html
         fi
         echo '</pre>' >> eval/reports/eval-failed.html
         echo '</body></html>' >> eval/reports/eval-failed.html
