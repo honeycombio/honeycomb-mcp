@@ -21,51 +21,44 @@ The build artifact goes into the `/build` folder.
 
 ## Honeycomb Configuration
 
-To use this MCP server, you **must** have a `.mcp-honeycomb.json` configuration file. Where it lives depends on how you use the MCP server.
+To use this MCP server, you need to provide Honeycomb API keys via environment variables. There are two ways to configure your Honeycomb environments:
 
-### In a codebase or repo
+### Option 1: Single Environment (Simplest)
 
-Create a configuration file at `.mcp-honeycomb.json` in your repository root.
+Set a single API key for your primary Honeycomb environment:
 
-```json
-{
-  "environments": [
-    {
-      "name": "production",
-      "apiKey": "your_prod_api_key"
-    },
-    {
-      "name": "staging",
-      "apiKey": "your_staging_api_key"
-    }
-  ]
-}
+```bash
+# For MCP configuration
+HONEYCOMB_API_KEY=your_api_key
 ```
 
-You can technically put it in any location that `MCP_HONEYCOMB_CONFIG` points to, but it's recommended to have a config file per codebase.
+The environment name will be automatically detected from the Honeycomb API.
 
-### Via a desktop client like Claude Desktop
+### Option 2: Multiple Environments
 
-If you're using Claude Desktop instead of an IDE, it's best to place a configuration file at `.mcp-honeycomb.json` in the Home directory of your computer.
+Set multiple environment variables for different Honeycomb environments:
 
-```json
-{
-  "environments": [
-    {
-      "name": "production",
-      "apiKey": "your_prod_api_key"
-    },
-    {
-      "name": "staging",
-      "apiKey": "your_staging_api_key"
-    }
-  ]
-}
+```bash
+# For multiple environments
+HONEYCOMB_ENV_PROD_API_KEY=your_prod_api_key
+HONEYCOMB_ENV_STAGING_API_KEY=your_staging_api_key
+HONEYCOMB_ENV_DEV_API_KEY=your_dev_api_key
+```
+
+Each environment will be accessible using the name in the environment variable (e.g., "prod", "staging", "dev").
+
+### Optional Configuration
+
+You can also set an optional API endpoint if you're using a custom Honeycomb instance:
+
+```bash
+# Optional custom API endpoint (defaults to https://api.honeycomb.io)
+HONEYCOMB_API_ENDPOINT=https://your-custom-honeycomb-endpoint.com
 ```
 
 ## MCP Configuration
 
-You'll need to run `node` on the location of the build artifact and specify the location of your Honeycomb MCP config.
+You'll need to run `node` on the location of the build artifact and pass your Honeycomb environment variables:
 
 ```json
 {
@@ -76,14 +69,33 @@ You'll need to run `node` on the location of the build artifact and specify the 
           "/fully/qualified/path/to/honeycomb-mcp/build/index.mjs"
         ],
         "env": {
-          "MCP_HONEYCOMB_CONFIG": "/fully/qualified/path/to/.mcp-honeycomb.json"
+          "HONEYCOMB_API_KEY": "your_api_key"
         }
       }
     }
 }
 ```
 
-While you can technically omit the `env` section if you have a more central installation, we recommend fully qualifying the path, even if it's a central installation.
+For multiple environments:
+
+```json
+{
+    "mcpServers": {
+      "honeycomb": {
+        "command": "node",
+        "args": [
+          "/fully/qualified/path/to/honeycomb-mcp/build/index.mjs"
+        ],
+        "env": {
+          "HONEYCOMB_ENV_PROD_API_KEY": "your_prod_api_key",
+          "HONEYCOMB_ENV_STAGING_API_KEY": "your_staging_api_key"
+        }
+      }
+    }
+}
+```
+
+You can also set these environment variables in your shell environment before starting the MCP client.
 
 The above configuration has been tested with the following clients:
 

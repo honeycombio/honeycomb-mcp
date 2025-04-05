@@ -14,21 +14,18 @@ import { QueryOptions } from "../types/api.js";
 import { Board, BoardsResponse } from "../types/board.js";
 import { Marker, MarkersResponse } from "../types/marker.js";
 import { Recipient, RecipientsResponse } from "../types/recipient.js";
-import { Config } from "../config.js";
+import { Config, Environment } from "../config.js";
 import { QueryError } from "../utils/errors.js";
 
 export class HoneycombAPI {
-  private environments: Map<string, { apiKey: string; apiEndpoint?: string }>;
+  private environments: Map<string, Environment>;
   private defaultApiEndpoint = "https://api.honeycomb.io";
   // Cache for auth responses to avoid repeated API calls
   private authCache: Map<string, AuthResponse> = new Map();
 
   constructor(config: Config) {
     this.environments = new Map(
-      config.environments.map(env => [env.name, { 
-        apiKey: env.apiKey,
-        apiEndpoint: env.apiEndpoint
-      }])
+      config.environments.map(env => [env.name, env])
     );
   }
 
@@ -36,6 +33,21 @@ export class HoneycombAPI {
     return Array.from(this.environments.keys());
   }
   
+  /**
+   * Check if an environment has a specific permission
+   * 
+   * @param environment - The environment name
+   * @param permission - The permission to check
+   * @returns True if the environment has the permission, false otherwise
+   */
+  hasPermission(environment: string, permission: string): boolean {
+    const env = this.environments.get(environment);
+    if (!env) {
+      return false;
+    }
+    return env.permissions?.[permission] === true;
+  }
+
   /**
    * Get authentication information for an environment
    * 
@@ -52,6 +64,17 @@ export class HoneycombAPI {
       const authInfo = await this.requestWithRetry<AuthResponse>(environment, "/1/auth");
       // Cache the result
       this.authCache.set(environment, authInfo);
+      
+      // Update the environment with auth info if not already populated
+      const env = this.environments.get(environment);
+      if (env && (!env.teamSlug || !env.permissions)) {
+        env.teamSlug = authInfo.team?.slug;
+        env.teamName = authInfo.team?.name;
+        env.environmentSlug = authInfo.environment?.slug;
+        env.permissions = authInfo.api_key_access;
+        this.environments.set(environment, env);
+      }
+      
       return authInfo;
     } catch (error) {
       throw new Error(`Failed to get auth info: ${error instanceof Error ? error.message : String(error)}`);
@@ -65,6 +88,13 @@ export class HoneycombAPI {
    * @returns The team slug
    */
   async getTeamSlug(environment: string): Promise<string> {
+    // First check if we already have the team slug in the environment
+    const env = this.environments.get(environment);
+    if (env?.teamSlug) {
+      return env.teamSlug;
+    }
+    
+    // Fall back to auth info
     const authInfo = await this.getAuthInfo(environment);
     
     if (!authInfo.team?.slug) {

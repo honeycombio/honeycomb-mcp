@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { HoneycombAPI } from "./client.js";
-import { Config } from "../config.js";
+import { Config, Environment } from "../config.js";
 import { HoneycombError } from "../utils/errors.js";
 import { Column } from "../types/column.js";
 
@@ -13,8 +13,18 @@ describe("HoneycombAPI", () => {
   let api: HoneycombAPI;
   const testConfig: Config = {
     environments: [
-      { name: "prod", apiKey: "prod-key" },
-      { name: "dev", apiKey: "dev-key" },
+      { 
+        name: "prod", 
+        apiKey: "prod-key",
+        teamSlug: "test-team",
+        permissions: { query: true, read_datasets: true, read_boards: false }
+      },
+      { 
+        name: "dev", 
+        apiKey: "dev-key",
+        teamSlug: "test-team-dev",
+        permissions: { query: true, read_datasets: true, read_boards: true }
+      },
     ],
   };
 
@@ -41,6 +51,20 @@ describe("HoneycombAPI", () => {
 
     it("throws on unknown environment", async () => {
       await expect(api.listDatasets("unknown")).rejects.toThrow(/Unknown environment/);
+    });
+    
+    it("checks permissions correctly", () => {
+      expect(api.hasPermission("prod", "query")).toBe(true);
+      expect(api.hasPermission("prod", "read_boards")).toBe(false);
+      expect(api.hasPermission("dev", "read_boards")).toBe(true);
+      expect(api.hasPermission("unknown", "query")).toBe(false);
+    });
+    
+    it("gets team slug from environment", async () => {
+      const slug = await api.getTeamSlug("prod");
+      expect(slug).toBe("test-team");
+      // Should not have made a fetch request since it's already in the environment
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

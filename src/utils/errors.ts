@@ -32,7 +32,7 @@ export class HoneycombError extends Error {
 
     return new HoneycombError(
       422,
-      `Query validation failed: ${message}\n\nSuggested next steps:\n- ${contextStr}\n\nPlease verify:\n- The environment name is correct and configured in .mcp-honeycomb.json\n- Your API key is valid\n- The dataset exists and you have access to it\n- Your query parameters are valid`
+      `Query validation failed: ${message}\n\nSuggested next steps:\n- ${contextStr}\n\nPlease verify:\n- The environment name is correct and configured via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY\n- Your API key is valid\n- The dataset exists and you have access to it\n- Your query parameters are valid`
     );
   }
 

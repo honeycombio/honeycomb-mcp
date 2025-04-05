@@ -43,7 +43,7 @@ export async function handleToolError(
 
   let helpText = `Failed to execute tool '${toolName}': ${errorMessage}\n\n` +
     `Please verify:\n` +
-    `- The environment name is correct and configured in .mcp-honeycomb.json\n` +
+    `- The environment name is correct and configured via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY\n` +
     `- Your API key is valid\n` +
     `- The dataset exists and you have access to it\n` +
     `- Your query parameters are valid\n`;
