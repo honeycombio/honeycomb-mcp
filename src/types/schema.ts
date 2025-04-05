@@ -1,12 +1,16 @@
 import { z } from "zod";
 
-export const DatasetArgumentsSchema = z.object({
+// Base schema for dataset arguments
+export const DatasetArgumentsBaseSchema = z.object({
   environment: z.string(),
   dataset: z.union([
     z.literal("__all__"),
     z.string().min(1)
   ]),
 });
+
+// Dataset arguments with pagination
+export const DatasetArgumentsSchema = DatasetArgumentsBaseSchema.merge(PaginationSchema);
 
 // Add a schema for column-related operations
 export const ColumnInfoSchema = z.object({
@@ -280,11 +284,26 @@ export const ConfigSchema = z.object({
 });
 
 /**
+ * Schema for pagination, filtering, and sorting options
+ */
+export const PaginationSchema = z.object({
+  page: z.number().optional().describe("Page number (1-based)"),
+  limit: z.number().optional().describe("Number of items per page"),
+  sort_by: z.string().optional().describe("Field to sort by"),
+  sort_order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
+  search: z.string().optional().describe("Search term to filter results"),
+  search_fields: z.union([
+    z.string(), 
+    z.array(z.string())
+  ]).optional().describe("Fields to search in (string or array of strings)"),
+});
+
+/**
  * Schema for listing boards
  */
 export const ListBoardsSchema = z.object({
   environment: z.string().describe("The Honeycomb environment"),
-});
+}).merge(PaginationSchema);
 
 /**
  * Schema for getting a specific board
@@ -306,7 +325,7 @@ export const MarkerTypeSchema = z.enum([
  */
 export const ListMarkersSchema = z.object({
   environment: z.string().describe("The Honeycomb environment"),
-});
+}).merge(PaginationSchema);
 
 /**
  * Schema for getting a specific marker
@@ -321,7 +340,7 @@ export const GetMarkerSchema = z.object({
  */
 export const ListRecipientsSchema = z.object({
   environment: z.string().describe("The Honeycomb environment"),
-});
+}).merge(PaginationSchema);
 
 /**
  * Schema for getting a specific recipient
