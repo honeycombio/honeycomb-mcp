@@ -526,15 +526,18 @@ export class HoneycombAPI {
       calculations: [{ op: "COUNT" }],
       breakdowns: [...params.columns],
       time_range: params.timeRange || 3600,
-      orders: [
-        {
-          column: params.column,
-          op: "COUNT",
-          order: "descending",
-        },
-      ],
       limit: 10,
     };
+    
+    // Only add orders if we have columns
+    if (params.columns && params.columns.length > 0) {
+      query.orders = [
+        {
+          column: params.columns[0] as string, // Force type assertion
+          order: "descending",
+        }
+      ];
+    }
 
     // Add numeric calculations for any numeric columns
     const numericColumns = columns.filter(
