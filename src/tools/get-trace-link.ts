@@ -13,7 +13,14 @@ export function createTraceDeepLinkTool(api: HoneycombAPI) {
   return {
     name: "get_trace_link",
     description: "Generates a direct deep link to a specific trace in the Honeycomb UI. This tool creates a URL that opens a specific distributed trace, optionally positioning to a particular span and time range. If no time range is specified, the trace must have been generated within two hours from the current time. If only the start time is provided, the end time is assumed to be 10 minutes from the start time.",
-    schema: TraceDeepLinkSchema,
+    schema: {
+      environment: z.string().min(1).trim().describe("The Honeycomb environment"),
+      dataset: z.string().min(1).trim().describe("The dataset containing the trace"),
+      traceId: z.string().describe("The unique trace ID"),
+      spanId: z.string().optional().describe("The unique span ID to jump to within the trace"),
+      traceStartTs: z.number().int().nonnegative().optional().describe("Start timestamp in Unix epoch seconds"),
+      traceEndTs: z.number().int().nonnegative().optional().describe("End timestamp in Unix epoch seconds")
+    },
     /**
      * Handler for the get_trace_link tool
      * 
