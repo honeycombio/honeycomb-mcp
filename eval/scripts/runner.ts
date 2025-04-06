@@ -210,7 +210,8 @@ export class EvalRunner {
     
     try {
       // Run as agent mode for all evaluations
-      console.log(`Running agent evaluation: ${prompt.prompt}`);
+      const promptId = prompt.id || 'unknown';
+      console.log(`[Eval ${promptId}] Running agent evaluation: ${prompt.prompt.substring(0, 100)}${prompt.prompt.length > 100 ? '...' : ''}`);
       const toolCalls = await this.runAgentMode(prompt, provider, modelName);
       
       const endTime = Date.now();
@@ -231,9 +232,11 @@ export class EvalRunner {
         if (configuredJudge) {
           judgeProvider = configuredJudge;
           judgeModel = this.config.judge.model;
-          console.log(`Using configured judge: ${judgeProvider.name}/${judgeModel}`);
+          const promptId = prompt.id || 'unknown';
+      console.log(`[Eval ${promptId}] Using configured judge: ${judgeProvider.name}/${judgeModel}`);
         } else {
-          console.warn(`Configured judge provider "${this.config.judge.provider}" not found, falling back to test provider`);
+          const promptId = prompt.id || 'unknown';
+          console.warn(`[Eval ${promptId}] Configured judge provider "${this.config.judge.provider}" not found, falling back to test provider`);
         }
       }
       
@@ -401,565 +404,29 @@ REASONING: [detailed explanation]
     return validationPrompt;
   }
   
-  /**
-   * Run a pre-defined sequence of tool calls with parameter expansion
-   * Supports using results from previous steps in subsequent calls via variable expansion
-   */
-  private async runMultiStepMode(steps: any[]): Promise<any[]> {
-    if (!this.client) {
-      throw new Error('MCP client not initialized');
-    }
-    
-    const toolCalls: any[] = [];
-    const stepResults: Record<number, any> = {}; // Store results by step index for reference
-    
-    for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
-      const step = steps[stepIndex];
-      
-      // Expand parameters using previous step results
-      if (this.verbose) {
-        console.log(`Step ${stepIndex}: Original parameters before expansion:`, JSON.stringify(step.parameters));
-      }
-      const expandedParameters = this.expandStepParameters(step.parameters, stepResults);
-      
-      if (this.verbose) {
-        console.log(`Step ${stepIndex}: Calling tool ${step.tool} with expanded params:`, JSON.stringify(expandedParameters));
-      } else {
-        console.log(`Step ${stepIndex}: ${step.tool}`);
-      }
-      const callStartTime = Date.now();
-      
-      try {
-        const response = await this.client.callTool({
-          name: step.tool,
-          arguments: expandedParameters
-        });
-        
-        const callEndTime = Date.now();
-        
-        // Store the result for potential use in later steps
-        stepResults[stepIndex] = response;
-        
-        toolCalls.push({
-          tool: step.tool,
-          parameters: expandedParameters,
-          response,
-          timestamp: new Date(callStartTime).toISOString(),
-          latencyMs: callEndTime - callStartTime
-        });
-      } catch (error) {
-        // Record the error but continue with next steps
-        toolCalls.push({
-          tool: step.tool,
-          parameters: expandedParameters,
-          response: { error: error instanceof Error ? error.message : String(error) },
-          timestamp: new Date(callStartTime).toISOString(),
-          latencyMs: Date.now() - callStartTime
-        });
-      }
-    }
-    
-    return toolCalls;
-  }
+  // runMultiStepMode removed - only using agent mode for evaluations
+  
+  // Parameter expansion utilities removed - only using agent mode for evaluations
+  
+  // runConversationMode removed - only using agent mode for evaluations
   
   /**
-   * Expand parameter values using previous step results
-   * Supports referencing previous results with patterns like ${{step:0.path.to.value}}
-   * Also supports fallbacks with ${{step:0.path.to.value||fallback}}
+   * Build simplified tool documentation for agent mode
+   * This follows the standard MCP client approach of providing basic tool info
+   * without adding custom examples or hints
    */
-  private expandStepParameters(parameters: any, stepResults: Record<number, any>): any {
-    if (!parameters) return parameters;
-    
-    const expandString = (value: string): string => {
-      // Match patterns like ${{step:0.columns[0].name}} or ${{step:0.columns[0].name||fallback}}
-      return value.replace(/\$\{\{step:(\d+)\.([^}|]+)(?:\|\|([^}]+))?\}\}/g, (match, stepNum, path, fallback) => {
-        const stepIndex = parseInt(stepNum, 10);
-        if (!stepResults[stepIndex]) {
-          console.warn(`Warning: Reference to step ${stepIndex} result but step either failed or doesn't exist`);
-          return fallback || 'duration_ms'; // Use fallback or a sensible default
-        }
-        
-        try {
-          // Parse the path expression and extract the value
-          const value = this.getValueByPath(stepResults[stepIndex], path);
-          if (value === undefined || value === null) {
-            if (this.verbose) {
-              console.warn(`Warning: Path ${path} in step ${stepIndex} result returned null/undefined.`);
-              console.log(`Available properties at step ${stepIndex}:`, Object.keys(stepResults[stepIndex]).join(', '));
-            }
-            
-            // Use fallback value if provided, or try some sensible defaults based on context
-            if (fallback) {
-              return fallback;
-            }
-            
-            // Try to determine a reasonable default based on the parameter context
-            if (path.includes('column') || path.endsWith('.key')) {
-              if (path.includes('duration') || match.includes('duration')) {
-                return 'duration_ms';
-              } else if (path.includes('name') || match.includes('name')) {
-                return 'name';
-              } else {
-                // Check if we can find any duration-related columns
-                const columnsData = stepResults[stepIndex].columns;
-                if (Array.isArray(columnsData)) {
-                  const durationColumn = columnsData.find(col => 
-                    col.key?.includes('duration') || col.description?.includes('duration')
-                  );
-                  if (durationColumn) {
-                    console.log(`Found fallback duration column: ${durationColumn.key}`);
-                    return durationColumn.key;
-                  }
-                  
-                  // If no duration column, use the first column
-                  if (columnsData.length > 0 && columnsData[0].key) {
-                    console.log(`Using first available column as fallback: ${columnsData[0].key}`);
-                    return columnsData[0].key;
-                  }
-                }
-              }
-            }
-            
-            return 'duration_ms'; // Final fallback
-          }
-          
-          return String(value); // Force conversion to string to ensure it works in string templates
-        } catch (e) {
-          console.warn(`Warning: Failed to extract path ${path} from step ${stepIndex} result:`, e);
-          console.log(`Result structure for step ${stepIndex}:`, JSON.stringify(stepResults[stepIndex]).substring(0, 200) + '...');
-          
-          // Use fallback or default
-          return fallback || 'duration_ms';
-        }
-      });
-    };
-    
-    // Recursively process all parameter values
-    const expandValue = (value: any): any => {
-      if (typeof value === 'string') {
-        return expandString(value);
-      } else if (Array.isArray(value)) {
-        return value.map(item => expandValue(item));
-      } else if (value !== null && typeof value === 'object') {
-        const result: Record<string, any> = {};
-        for (const [k, v] of Object.entries(value)) {
-          result[k] = expandValue(v);
-        }
-        return result;
-      }
-      return value;
-    };
-    
-    return expandValue(parameters);
-  }
-  
-  /**
-   * Extract a value from an object using a path expression
-   * Supports dot notation (user.name) and array access (items[0].name)
-   */
-  private getValueByPath(obj: any, path: string): any {
-    // Handle array indexing patterns like columns[0].name
-    const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
-    const parts = normalizedPath.split('.');
-    
-    let current = obj;
-    for (const part of parts) {
-      if (current === null || current === undefined) {
-        return undefined;
-      }
-      current = current[part];
-    }
-    
-    return current;
-  }
-  
-  /**
-   * Run conversation mode where an LLM drives tool selection
-   * This would typically involve:
-   * 1. LLM decides which tool to call
-   * 2. Tool is called and result is returned to LLM
-   * 3. LLM decides next action until completion
-   * 
-   * Note: This is a simplified implementation. A full implementation would use
-   * a proper agent framework or MCP conversation API.
-   * 
-   * The implementation includes special handling for:
-   * - Parameter validation and enforcement
-   * - Structured query building for run_query
-   * - Progressive analysis guidance
-   */
-  private async runConversationMode(prompt: EvalPrompt, provider: LLMProvider, modelName: string): Promise<any[]> {
-    if (!this.client) {
-      throw new Error('MCP client not initialized');
-    }
-    
-    // Get available tools
-    const toolsResult = await this.client.listTools();
-    
-    // Extract environment from prompt
-    const conversationEnvironment = prompt.prompt.match(/['"]([^'"]+?)['"] environment/)?.[1] || 'ms-demo';
-    
-    // Build detailed tool documentation with required parameters
-    const availableTools = toolsResult.tools.map(t => {
-      // Extract parameter information
-      const parameterInfo = t.parameters ? 
-        this.extractRequiredParams(t.parameters) : 
-        "No parameters required";
-      
-      return {
-        name: t.name,
-        description: t.description || 'No description available',
-        parameters: parameterInfo
-      };
-    });
-    
-    // Set up conversation tracking
-    const toolCalls: any[] = [];
-    const maxSteps = prompt.maxSteps || 5; // Default to 5 if not specified
-    let conversationContext = `
-You are performing a multi-step data analysis task. Your goal is to use the available tools to progressively analyze data, where each step builds on information from previous steps.
-
-TASK:
-${prompt.prompt}
-
-IMPORTANT CONTEXT:
-- You are working with the environment: "${conversationEnvironment}"
-- Always include the "environment" parameter with value "${conversationEnvironment}" in your tool calls
-- Make sure to use information from previous steps to inform each new step
-
-AVAILABLE TOOLS:
-${availableTools.map(t => `
-## ${t.name}
-${t.description}
-
-Parameters:
-${t.parameters}
-${t.name === 'run_query' ? `
-Example usage:
-\`\`\`json
-{
-  "environment": "${conversationEnvironment}",
-  "dataset": "dataset_name", 
-  "calculations": [
-    {"op": "COUNT"},
-    {"op": "AVG", "column": "duration_ms"}
-  ],
-  "breakdowns": ["service.name"],
-  "time_range": 3600
-}
-\`\`\`
-` : ''}
-`).join('\n')}
-
-FORMAT INSTRUCTIONS:
-When you want to use a tool, respond with:
-\`\`\`json
-{
-  "tool": "tool_name",
-  "parameters": {
-    "environment": "${conversationEnvironment}",
-    "param2": "value2",
-    ...
-  },
-  "reasoning": "Brief explanation of why you're using this tool and how it builds on previous steps"
-}
-\`\`\`
-
-When you've completed the analysis, respond with:
-\`\`\`json
-{ 
-  "done": true, 
-  "explanation": "Detailed explanation of your findings and how you progressively built your analysis"
-}
-\`\`\`
-`;
-    
-    // Start conversation loop
-    let done = false;
-    let stepCount = 0;
-    
-    while (!done && stepCount < maxSteps) {
-      stepCount++;
-      
-      // Set context for token tracking - this is specifically for tool usage
-      if (provider.setToolCallContext) {
-        provider.setToolCallContext(true);
-      }
-      
-      try {
-        // Ask LLM what tool to use
-        const llmResponse = await provider.runPrompt(conversationContext, modelName);
-        
-        // Improved JSON extraction and validation
-        let jsonContent = '';
-        let parsedResponse = null;
-        
-        // Try to find JSON objects directly - look for any JSON-like content
-        try {
-          // First try to parse directly if the response looks like a JSON object
-          if (llmResponse.trim().startsWith('{') && llmResponse.trim().endsWith('}')) {
-            jsonContent = llmResponse.trim();
-            parsedResponse = JSON.parse(jsonContent);
-          } 
-          // Next try to extract from code blocks with or without json annotation
-          else {
-            const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-              jsonContent = jsonMatch[1].trim();
-              parsedResponse = JSON.parse(jsonContent);
-            }
-          }
-        } catch (error) {
-          // If we get here, we found what looked like JSON but it couldn't be parsed
-          // Let's get detailed diagnostic info about where the parsing failed
-          const parseError = error as Error;
-          const errorMessage = parseError.message || 'Unknown error';
-          const errorLines = errorMessage.split('\n');
-          const positionMatch = errorLines[0]?.match(/at position (\d+)/);
-          const position = positionMatch && positionMatch[1] ? parseInt(positionMatch[1]) : -1;
-          
-          // Format error with context around the error position
-          let errorContext = '';
-          if (position >= 0 && jsonContent) {
-            const start = Math.max(0, position - 50);
-            const end = Math.min(jsonContent.length, position + 50);
-            const before = jsonContent.substring(start, position);
-            const after = jsonContent.substring(position, end);
-            errorContext = `\nError context:\n...${before}👉HERE👈${after}...\n`;
-            
-            // Add line number info
-            const lines = jsonContent.substring(0, position).split('\n');
-            const line = lines.length;
-            const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
-            const column = lastLine ? lastLine.length + 1 : 0;
-            errorContext += `(Line ${line}, Column ${column})`;
-          }
-          
-          toolCalls.push({
-            error: `Error parsing conversation response: ${parseError.message || 'Unknown error'}${errorContext}`,
-            response: llmResponse,
-            timestamp: new Date().toISOString(),
-            latencyMs: 0
-          });
-          
-          // Update context with detailed error and guidance
-          conversationContext += `\n\n## Error in Step ${stepCount}:
-Error: ${parseError.message || 'Unknown error'}
-${errorContext}
-
-Please fix your JSON format. Common issues include:
-1. Missing or extra commas between properties
-2. Missing quotes around property names or string values
-3. Trailing commas at the end of objects or arrays
-4. Unescaped quotes or special characters in strings
-
-Try again with valid JSON formatting.
-`;
-          continue; // Skip to next iteration rather than breaking
-        }
-        
-        // If we couldn't find or parse any JSON
-        if (!parsedResponse) {
-          toolCalls.push({
-            error: "Invalid conversation response format - no valid JSON found",
-            response: llmResponse,
-            timestamp: new Date().toISOString(),
-            latencyMs: 0
-          });
-          
-          // Add guidance to the context
-          conversationContext += `\n\n## Error in Step ${stepCount}:
-Error: No valid JSON found in your response.
-
-Remember to format your response as JSON within triple backticks:
-\`\`\`json
-{
-  "tool": "tool_name",
-  "parameters": {
-    "environment": "${conversationEnvironment}",
-    "param2": "value2",
-    ...
-  },
-  "reasoning": "Brief explanation of why you're using this tool"
-}
-\`\`\`
-
-Try again with valid JSON formatting.
-`;
-          continue; // Skip to next iteration without breaking
-        }
-        
-        // Check if done
-        if (parsedResponse.done) {
-          done = true;
-          toolCalls.push({
-            done: true,
-            explanation: parsedResponse.explanation || "Task completed",
-            timestamp: new Date().toISOString(),
-            latencyMs: 0
-          });
-          break;
-        }
-        
-        // Call the requested tool
-        const { tool, parameters, reasoning } = parsedResponse;
-        
-        // Ensure environment parameter is set
-        if (!parameters.environment) {
-          parameters.environment = conversationEnvironment;
-        }
-        
-        // Special handling for run_query tool to ensure parameters are valid
-        let processedParameters = { ...parameters };
-        if (tool === 'run_query') {
-          processedParameters = this.ensureValidQueryParameters(processedParameters);
-        }
-        
-        if (this.verbose) {
-          console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
-        } else {
-          console.log(`[Step ${stepCount}] ${tool}`);
-        }
-        
-        const callStartTime = Date.now();
-        let response;
-        try {
-          response = await this.client.callTool({
-            name: tool,
-            arguments: processedParameters
-          });
-        } catch (error) {
-          response = { error: error instanceof Error ? error.message : String(error) };
-        }
-        const callEndTime = Date.now();
-        
-        // Record the tool call
-        const toolCall = {
-          tool,
-          parameters: processedParameters,
-          reasoning: reasoning || "No reasoning provided",
-          response,
-          timestamp: new Date(callStartTime).toISOString(),
-          latencyMs: callEndTime - callStartTime
-        };
-        toolCalls.push(toolCall);
-        
-        // Update conversation context with more guidance
-        conversationContext += `\n\n## Step ${stepCount} Results:
-You called tool: ${tool}
-Your reasoning: ${reasoning || "No reasoning provided"}
-Parameters: ${JSON.stringify(parameters)}
-Tool response: ${JSON.stringify(response)}
-
-What would you like to do next? Remember to:
-1. Use the information you just learned to inform your next step
-2. Include "${conversationEnvironment}" as the environment parameter
-3. Explain your reasoning for the next step
-`;
-      } catch (error) {
-        // Handle errors in the conversation
-        toolCalls.push({
-          error: `Error in conversation step ${stepCount}: ${error instanceof Error ? error.message : String(error)}`,
-          timestamp: new Date().toISOString(),
-          latencyMs: 0
-        });
-        
-        // Update context with error and more guidance
-        conversationContext += `\n\n## Error in Step ${stepCount}:
-Error: ${error instanceof Error ? error.message : String(error)}
-
-This might be because:
-- Required parameters were missing (especially "environment")
-- The tool name was incorrect
-- Parameters were not formatted correctly
-
-Please try again with correct parameters. Make sure to:
-1. Always include "environment": "${conversationEnvironment}" in your parameters
-2. Check that other required parameters are included
-3. Format your response as valid JSON
-`;
-      }
-    }
-    
-    // If we hit the step limit
-    if (!done && stepCount >= maxSteps) {
-      toolCalls.push({
-        error: `Reached maximum conversation steps (${maxSteps})`,
-        timestamp: new Date().toISOString(),
-        latencyMs: 0
-      });
-    }
-    
-    return toolCalls;
-  }
-  
-  /**
-   * Build enhanced tool documentation with examples for agent mode
-   */
-  private buildEnhancedToolDocs(tools: any[], environment: string): string {
+  private buildToolDocs(tools: any[]): string {
     return tools.map(tool => {
-      // Extract parameter information
-      const parameterInfo = tool.parameters ? 
-        this.extractRequiredParams(tool.parameters) : 
-        "No parameters required";
-      
-      // Create example for specific tools
-      let exampleBlock = '';
-      if (tool.name === 'run_query') {
-        exampleBlock = `
-Example:
-\`\`\`json
-{
-  "environment": "${environment}",
-  "dataset": "frontend", 
-  "calculations": [
-    {"op": "COUNT"},
-    {"op": "AVG", "column": "duration_ms"}
-  ],
-  "breakdowns": ["service.name"],
-  "time_range": 3600,
-  "filters": [
-    {"column": "duration_ms", "op": ">", "value": 0}
-  ]
-}
-\`\`\`
-`;
-      } else if (tool.name === 'get_columns') {
-        exampleBlock = `
-Example:
-\`\`\`json
-{
-  "environment": "${environment}",
-  "dataset": "frontend"
-}
-\`\`\`
-`;
-      } else if (tool.name === 'analyze_column') {
-        exampleBlock = `
-Example:
-\`\`\`json
-{
-  "environment": "${environment}",
-  "dataset": "frontend",
-  "column": "duration_ms"
-}
-\`\`\`
-`;
-      }
-      
+      // Just provide the tool name and description
       return `
 ## ${tool.name}
 ${tool.description || 'No description available'}
-
-Required Parameters:
-${parameterInfo}
-${exampleBlock}
 `;
     }).join('\n');
   }
 
   /**
-   * Run agent mode with structured thinking and goal-directed behavior
+   * Run agent mode with minimal instructions to match standard MCP client approach
    */
   private async runAgentMode(prompt: EvalPrompt, provider: LLMProvider, modelName: string): Promise<any[]> {
     if (!this.client) {
@@ -974,14 +441,14 @@ ${exampleBlock}
                        prompt.prompt.match(/['"]([^'"]+?)['"] environment/)?.[1] || 
                        'ms-demo';
     
-    // Build enhanced tool documentation with examples
-    const toolDocs = this.buildEnhancedToolDocs(toolsResult.tools, environment);
+    // Build simplified tool documentation without examples
+    const toolDocs = this.buildToolDocs(toolsResult.tools);
     
     // Set up tracking
     const toolCalls: any[] = [];
     const maxSteps = prompt.maxSteps || 8;
     
-    // Initialize agent context with thoughtful structure
+    // Initialize agent context with structured instructions but neutral about tool implementation
     let agentContext = `
 You are an AI agent performing data analysis on a Honeycomb environment. Your goal is to use the available tools to analyze data and reach specific insights.
 
@@ -991,19 +458,15 @@ ${prompt.prompt}
 AVAILABLE TOOLS:
 ${toolDocs}
 
-IMPORTANT CONTEXT:
-- You are working with the environment: "${environment}"
-- Always include the "environment" parameter with value "${environment}" in your tool calls
-- Think step-by-step about what information you need and how to get it
-- Each tool call should build upon previous information
-- Explain your thought process at each step
+CONTEXT:
+- Environment: "${environment}"
 `;
 
     if (prompt.context) {
       agentContext += `\n\nADDITIONAL CONTEXT:\n${prompt.context}\n`;
     }
 
-    // Instructions for agent's structured thinking
+    // Response format instructions without hints about tool usage
     agentContext += `
 FORMAT YOUR RESPONSE AS:
 \`\`\`json
@@ -1043,8 +506,6 @@ OR, if you've completed your analysis:
   "reasoning": "Why the goal has been achieved"
 }
 \`\`\`
-
-Note: For the final summary, you can either provide a simple string or a structured array of items as shown above, whichever is more appropriate for the task.
 `;
 
     // Start agent loop
@@ -1115,18 +576,12 @@ Note: For the final summary, you can either provide a simple string or a structu
             latencyMs: 0
           });
           
-          // Add detailed guidance to the agent context to help fix the error
+          // Add error message with formatting guidance
           agentContext += `\n\n## Error in Step ${stepCount}:
 Error: ${parseError.message || 'Unknown error'}
 ${errorContext}
 
-Please fix your JSON format. Common issues include:
-1. Missing or extra commas between properties
-2. Missing quotes around property names or string values
-3. Trailing commas at the end of objects or arrays
-4. Unescaped quotes or special characters in strings
-
-Try again with valid JSON formatting.
+Please make sure your response is properly formatted JSON according to the format specified earlier.
 `;
           
           continue; // Skip to next iteration rather than breaking
@@ -1141,24 +596,11 @@ Try again with valid JSON formatting.
             latencyMs: 0
           });
           
-          // Add guidance to the agent context
+          // Add guidance to follow the specified format
           agentContext += `\n\n## Error in Step ${stepCount}:
 Error: No valid JSON found in your response.
 
-Remember to format your response as JSON within triple backticks:
-\`\`\`json
-{
-  "thought": "...",
-  "plan": "...",
-  "action": {
-    "tool": "tool_name",
-    "parameters": { ... }
-  },
-  "reasoning": "..."
-}
-\`\`\`
-
-Try again with valid JSON formatting.
+Please make sure your response is properly formatted JSON according to the format specified earlier.
 `;
           
           continue; // Skip to next iteration without breaking
@@ -1188,16 +630,12 @@ Try again with valid JSON formatting.
           parameters.environment = environment;
         }
         
-        // Special handling for query parameters
-        let processedParameters = { ...parameters };
-        if (tool === 'run_query') {
-          processedParameters = this.ensureValidQueryParameters(processedParameters);
-        }
-        
+        // No special parameter handling - pass parameters directly to the tool
+        const promptId = prompt.id || 'unknown';
         if (this.verbose) {
-          console.log(`[Agent Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
+          console.log(`[Eval ${promptId}][Step ${stepCount}] Calling tool ${tool} with params`, parameters);
         } else {
-          console.log(`[Agent Step ${stepCount}] ${tool}`);
+          console.log(`[Eval ${promptId}][Step ${stepCount}] ${tool}`);
         }
         
         // Execute tool call
@@ -1206,21 +644,18 @@ Try again with valid JSON formatting.
         try {
           response = await this.client.callTool({
             name: tool,
-            arguments: processedParameters
+            arguments: parameters
           });
         } catch (error) {
           response = { error: error instanceof Error ? error.message : String(error) };
         }
         const callEndTime = Date.now();
         
-        // Record the tool call with thought process
+        // Record the tool call with minimal structure
         const toolCall = {
           step: stepCount,
           tool,
-          parameters: processedParameters,
-          thought: parsedResponse.thought,
-          plan: parsedResponse.plan,
-          reasoning: parsedResponse.reasoning,
+          parameters,
           response,
           timestamp: new Date(callStartTime).toISOString(),
           latencyMs: callEndTime - callStartTime
@@ -1228,20 +663,13 @@ Try again with valid JSON formatting.
         
         toolCalls.push(toolCall);
         
-        // Update agent context with result and guidance
+        // Update agent context with step results but without tool-specific guidance
         agentContext += `\n\n## Step ${stepCount} Results:
-YOUR THOUGHT: ${parsedResponse.thought}
-YOUR PLAN: ${parsedResponse.plan}
-YOUR REASONING: ${parsedResponse.reasoning}
 TOOL CALLED: ${tool}
-PARAMETERS: ${JSON.stringify(processedParameters, null, 2)}
+PARAMETERS: ${JSON.stringify(parameters, null, 2)}
 TOOL RESPONSE: ${JSON.stringify(response, null, 2)}
 
-Now analyze this information and determine your next step. Remember to:
-1. Build directly on what you've just learned
-2. Progress toward your overall goal
-3. Explain your thinking process clearly
-4. When you've completed your analysis, make sure to provide a structured summary
+For your next step, analyze this information and decide what to do next.
 `;
       } catch (error) {
         // Handle JSON parsing or other errors
@@ -1251,16 +679,11 @@ Now analyze this information and determine your next step. Remember to:
           latencyMs: 0
         });
         
-        // Update context with error guidance
+        // Update context with error message but maintain formatting guidance
         agentContext += `\n\n## Error in Step ${stepCount}:
 Error: ${error instanceof Error ? error.message : String(error)}
 
-This might be because:
-- The JSON format was incorrect
-- The tool name was invalid
-- Required parameters were missing
-
-Try again with valid JSON formatting and ensure you're using the correct tool name and parameters.
+Please try again with a valid JSON response following the format specified earlier.
 `;
       }
     }
@@ -1277,126 +700,9 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
     return toolCalls;
   }
   
-  /**
-   * Extract required parameters information from a JSON Schema
-   */
-  private extractRequiredParams(parameters: any): string {
-    try {
-      // If we have a properties object and required array
-      if (parameters.properties && parameters.required) {
-        const requiredParams = parameters.required;
-        const paramDescriptions: string[] = [];
-        
-        // For each property, check if it's required
-        for (const [name, details] of Object.entries(parameters.properties as Record<string, {type?: string; description?: string}>)) {
-          const isRequired = requiredParams.includes(name);
-          const type = details.type || 'any';
-          const description = details.description || '';
-          
-          paramDescriptions.push(
-            `- ${name}${isRequired ? ' (REQUIRED)' : ''}: ${type} - ${description}`
-          );
-        }
-        
-        return paramDescriptions.join('\n');
-      }
-      
-      // Fallback to just stringifying the schema
-      return JSON.stringify(parameters, null, 2);
-    } catch (error) {
-      return "Unable to parse parameters";
-    }
-  }
+  // extractRequiredParams removed - only using agent mode for evaluations
   
-  /**
-   * Ensure query parameters are valid for the run_query tool
-   */
-  private ensureValidQueryParameters(parameters: any): any {
-    const processedParams = { ...parameters };
-    
-    // Ensure calculations is always an array
-    if (!processedParams.calculations) {
-      processedParams.calculations = [{ op: "COUNT" }];
-    } else if (!Array.isArray(processedParams.calculations)) {
-      processedParams.calculations = [processedParams.calculations];
-    }
-    
-    // For MAX, AVG, etc. operations, ensure they have a column specified
-    processedParams.calculations = processedParams.calculations.map((calc: any) => {
-      if (calc.op && !calc.column && calc.field) {
-        // Some models might use 'field' instead of 'column'
-        return { ...calc, column: calc.field };
-      }
-      
-      // Simple defaults for common operations that require a column
-      if (calc.op && ['MAX', 'MIN', 'AVG', 'SUM', 'P95', 'P99'].includes(calc.op) && !calc.column) {
-        if (parameters.groupBy?.[0] || parameters.breakdowns?.[0]) {
-          // Use the first group-by field if available
-          const firstField = parameters.groupBy?.[0] || parameters.breakdowns?.[0];
-          return { ...calc, column: firstField };
-        } else {
-          // Default to a standard duration column if we can't determine anything else
-          return { ...calc, column: 'duration_ms' };
-        }
-      }
-      
-      return calc;
-    });
-    
-    // Ensure time_range is present
-    if (!processedParams.time_range && !processedParams.start_time && !processedParams.end_time) {
-      processedParams.time_range = 3600; // Default to last hour
-    }
-    
-    // Standardize parameter names
-    if (processedParams.groupBy && !processedParams.breakdowns) {
-      processedParams.breakdowns = processedParams.groupBy;
-      delete processedParams.groupBy;
-    }
-    
-    if (processedParams.order && !processedParams.orders) {
-      processedParams.orders = processedParams.order;
-      delete processedParams.order;
-    }
-    
-    // Validate and fix orders format 
-    if (processedParams.orders && !Array.isArray(processedParams.orders)) {
-      processedParams.orders = [processedParams.orders];
-    }
-    
-    // Fix any orders that reference calculations
-    if (processedParams.orders && Array.isArray(processedParams.orders)) {
-      processedParams.orders = processedParams.orders.map((order: any) => {
-        if (!order.op && order.column) {
-          // Try to match with a calculation
-          const matchingCalc = processedParams.calculations.find((calc: any) => 
-            calc.column === order.column
-          );
-          if (matchingCalc) {
-            return { 
-              op: matchingCalc.op, 
-              column: matchingCalc.column,
-              order: order.order || 'descending'
-            };
-          }
-        }
-        return order;
-      });
-    }
-    
-    // Ensure query key is moved to top level if present
-    if (processedParams.query) {
-      // Merge query properties into top level
-      for (const [key, value] of Object.entries(processedParams.query)) {
-        if (!processedParams[key]) {
-          processedParams[key] = value;
-        }
-      }
-      delete processedParams.query;
-    }
-    
-    return processedParams;
-  }
+  // Function removed - no special parameter processing
 
   async runAll(): Promise<EvalSummary> {
     try {
@@ -1429,22 +735,34 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
             console.warn(`No model name provided for provider: ${provider.name}`);
             continue;
           }
-          console.log(`Running evaluations with provider: ${provider.name}, model: ${modelName}`);
+          console.log(`Starting evaluations with provider: ${provider.name}, model: ${modelName}`);
           
-          // Use Promise.all with a limitation on concurrency
-          const batchSize = this.config.concurrency;
-          for (let i = 0; i < prompts.length; i += batchSize) {
-            const batch = prompts.slice(i, i + batchSize);
+          // Improved concurrency implementation with more explicit logging
+          const concurrencyLimit = this.config.concurrency;
+          console.log(`Running evaluations with concurrency limit: ${concurrencyLimit}`);
+          
+          // Process prompts in batches based on concurrency limit
+          for (let i = 0; i < prompts.length; i += concurrencyLimit) {
+            const batch = prompts.slice(i, Math.min(i + concurrencyLimit, prompts.length));
+            console.log(`Processing batch of ${batch.length} prompts (${i+1} to ${i+batch.length} of ${prompts.length})`);
+            
+            // Create an array of promises for each prompt in the batch
             const batchPromises = batch.map(async (prompt: EvalPrompt) => {
-              // Type guard for prompt.id
+              // Ensure prompt has an ID
               if (!prompt.id) {
-                console.warn('Warning: Prompt missing ID, generating fallback ID');
-                // @ts-ignore - we handle missing ID in runEvaluation
+                const fallbackId = `unknown-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                console.warn(`Warning: Prompt missing ID, using fallback ID: ${fallbackId}`);
+                prompt.id = fallbackId;
               }
+              
+              // Run the evaluation
               return this.runEvaluation(prompt, provider, modelName);
             });
+            
+            // Wait for all promises in this batch to complete before moving to the next batch
             const batchResults = await Promise.all(batchPromises);
             results.push(...batchResults);
+            console.log(`Completed batch of ${batch.length} prompts`);
           }
         }
       }
