@@ -77,42 +77,86 @@ async function executeQuery(
 export function createRunQueryTool(api: HoneycombAPI) {
   return {
     name: "run_query",
-    description: `⚠️⚠️⚠️ IMPORTANT: 'COUNT' and 'CONCURRENCY' operations MUST NOT have a 'column' specified. All other operations REQUIRE a 'column'. ⚠️⚠️⚠️ Executes a Honeycomb query against a dataset or environment, performing validation and returning raw results along with statistical summaries. NOTE: use __all__ as a dataset name to run a query against an environment.`,
+    description: `Executes a Honeycomb query, returning results with statistical summaries. 
+
+CRITICAL RULE: For COUNT operations, NEVER include a "column" field in your calculation, even as null or undefined. Example: Use {"op": "COUNT"} NOT {"op": "COUNT", "column": "anything"}.
+
+Additional Rules:
+1) All parameters must be at the TOP LEVEL (not nested inside a 'query' property)
+2) Field names must be exact - use 'op' (not 'operation'), 'breakdowns' (not 'group_by')
+3) Only use the exact operation names listed in the schema (e.g., use "P95" for 95th percentile, not "PERCENTILE")
+4) For all operations EXCEPT COUNT and CONCURRENCY, you must specify a "column" field
+`,
     schema: {
       environment: z.string().min(1).trim().describe("The Honeycomb environment to query"),
       dataset: z.string().min(1).trim().describe("The dataset to query. Use __all__ to query across all datasets in the environment."),
       calculations: z.array(z.object({
         op: z.enum([
-          "COUNT",                // ⚠️ NO COLUMN ALLOWED - counts all events
-          "CONCURRENCY",          // ⚠️ NO COLUMN ALLOWED - measures concurrent operations
-          "SUM",                  // ✓ REQUIRES COLUMN - sums values in column
-          "AVG",                  // ✓ REQUIRES COLUMN - averages values in column
-          "COUNT_DISTINCT",       // ✓ REQUIRES COLUMN - counts unique values
-          "MAX",                  // ✓ REQUIRES COLUMN - maximum value in column
-          "MIN",                  // ✓ REQUIRES COLUMN - minimum value in column
-          "P001",                 // ✓ REQUIRES COLUMN - 0.1th percentile
-          "P01",                  // ✓ REQUIRES COLUMN - 1st percentile
-          "P05",                  // ✓ REQUIRES COLUMN - 5th percentile
-          "P10",                  // ✓ REQUIRES COLUMN - 10th percentile
-          "P20",                  // ✓ REQUIRES COLUMN - 20th percentile
-          "P25",                  // ✓ REQUIRES COLUMN - 25th percentile (first quartile)
-          "P50",                  // ✓ REQUIRES COLUMN - 50th percentile (median)
-          "P75",                  // ✓ REQUIRES COLUMN - 75th percentile (third quartile)
-          "P80",                  // ✓ REQUIRES COLUMN - 80th percentile
-          "P90",                  // ✓ REQUIRES COLUMN - 90th percentile
-          "P95",                  // ✓ REQUIRES COLUMN - 95th percentile
-          "P99",                  // ✓ REQUIRES COLUMN - 99th percentile
-          "P999",                 // ✓ REQUIRES COLUMN - 99.9th percentile
-          "RATE_AVG",             // ✓ REQUIRES COLUMN - rate of change in average
-          "RATE_SUM",             // ✓ REQUIRES COLUMN - rate of change in sum
-          "RATE_MAX",             // ✓ REQUIRES COLUMN - rate of change in maximum
-          "HEATMAP",              // ✓ REQUIRES COLUMN - heat map visualization
-        ]).describe("⚠️⚠️⚠️ CALCULATION RULES: 'COUNT' and 'CONCURRENCY' operations CANNOT have a column. All other operations MUST have a column."),
-        column: z.string().min(1).trim().optional().describe("⚠️⚠️⚠️ COLUMN RULES: 1) NEVER provide a column for COUNT or CONCURRENCY, 2) ALWAYS provide a column for ALL other operations."),
-      })).describe("⚠️⚠️⚠️ List of calculations to perform. CRITICAL RULE: For 'COUNT' or 'CONCURRENCY', DO NOT include a column. For all other operations, a column IS REQUIRED."),
-      breakdowns: z.array(z.string().min(1).trim()).optional().describe("Columns to group results by. Creates separate results for each unique combination of values in these columns."),
+          "COUNT",               
+          "CONCURRENCY",         
+          "SUM",                 
+          "AVG",                 
+          "COUNT_DISTINCT",      
+          "MAX",                 
+          "MIN",                 
+          "P001",                
+          "P01",                 
+          "P05",                 
+          "P10",                 
+          "P20",                 
+          "P25",                 
+          "P50",                 
+          "P75",                 
+          "P80",                 
+          "P90",                 
+          "P95",                 
+          "P99",                 
+          "P999",                
+          "RATE_AVG",            
+          "RATE_SUM",            
+          "RATE_MAX",            
+          "HEATMAP",             
+        ]).describe(`⚠️⚠️⚠️ CRITICAL RULES FOR OPERATIONS:
+
+1. FOR COUNT OPERATIONS:
+   - NEVER include a "column" field
+   - CORRECT: {"op": "COUNT"}
+   - INCORRECT: {"op": "COUNT", "column": "anything"} 
+   
+2. FOR PERCENTILES:
+   - Use the exact P* operations (P95, P99, etc.)
+   - CORRECT: {"op": "P95", "column": "duration_ms"}
+   - INCORRECT: {"op": "PERCENTILE", "percentile": 95}
+   
+3. ALL operations EXCEPT COUNT and CONCURRENCY REQUIRE a column field
+
+COMMON ERRORS TO AVOID:
+- DO NOT include "column" with COUNT or CONCURRENCY
+- DO NOT use "PERCENTILE" - use "P95", "P99", etc. instead
+- DO NOT misspell operation names`),
+        column: z.string().min(1).trim().optional().describe("⚠️ CRITICAL: NEVER include this field when op is COUNT or CONCURRENCY. REQUIRED for all other operations."),
+      }).superRefine((calculation, ctx) => {
+        // Prevent column for COUNT or CONCURRENCY
+        if ((calculation.op === "COUNT" || calculation.op === "CONCURRENCY") && calculation.column !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `ERROR: ${calculation.op} operations MUST NOT have a column field. Remove the "column" field entirely.`,
+            path: ["column"]
+          });
+        }
+        
+        // Require column for all other operations
+        if (!(calculation.op === "COUNT" || calculation.op === "CONCURRENCY") && calculation.column === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `ERROR: ${calculation.op} operations REQUIRE a column field.`,
+            path: ["column"]
+          });
+        }
+      })).describe("⚠️ CRITICAL RULE: For COUNT or CONCURRENCY operations, you MUST OMIT the 'column' field COMPLETELY - do not include it at all. For all other operations, the 'column' field is REQUIRED."),
+      breakdowns: z.array(z.string().min(1).trim()).optional().describe("MUST use field name 'breakdowns' (not 'group_by'). Columns to group results by."),
       filters: z.array(z.object({
-        column: z.string().min(1).trim().describe("The name of the column to filter on"),
+        column: z.string().min(1).trim().describe("MUST use field name 'column'. Name of the column to filter on."),
         op: z.enum([
           "=", "!=", ">", ">=", "<", "<=", 
           "starts-with", "does-not-start-with", 
@@ -120,50 +164,57 @@ export function createRunQueryTool(api: HoneycombAPI) {
           "exists", "does-not-exist", 
           "contains", "does-not-contain",
           "in", "not-in"
-        ]).describe("Filter operator for comparing column values"),
-        value: z.any().optional().describe("The value to compare against. Optional for exists/does-not-exist operators.")
-      })).optional().describe("Pre-calculation filters to apply to the data. Restricts which events are included in the analysis."),
-      filter_combination: z.enum(["AND", "OR"]).optional().describe("How to combine multiple filters. AND requires all filters to match; OR requires any filter to match. Default is AND."),
+        ]).describe(`MUST use field name 'op'. Available operators:
+- Equality: "=", "!="
+- Comparison: ">", ">=", "<", "<="
+- String: "starts-with", "does-not-start-with", "ends-with", "does-not-end-with", "contains", "does-not-contain"
+- Existence: "exists", "does-not-exist"
+- Arrays: "in", "not-in" (use with array values)`),
+        value: z.any().optional().describe("MUST use field name 'value'. Comparison value. Optional for exists operators. Use arrays for in/not-in.")
+      })).optional().describe("MUST use field name 'filters' (an array of filter objects). Pre-calculation filters for the query."),
+      filter_combination: z.enum(["AND", "OR"]).optional().describe("MUST use field name 'filter_combination' (not 'combine_filters'). How to combine filters: AND or OR. Default: AND."),
       orders: z.array(z.object({
-        column: z.string().min(1).trim().optional().describe("The column to order by. Optional for COUNT and CONCURRENCY operations"),
-        op: z.string().describe("The operation to order by. Must be one of the calculation operations except HEATMAP"),
-        order: z.enum(["ascending", "descending"]).describe("Sort direction for the query results")
-      })).optional().describe("How to sort the results. Can only reference columns in breakdowns or operations in calculations."),
-      limit: z.number().int().positive().optional().describe("Maximum number of result rows to return"),
-      time_range: z.number().positive().optional().describe("Relative time range in seconds from now. E.g., 3600 for the last hour."),
-      start_time: z.number().int().positive().optional().describe("Absolute start time as UNIX timestamp in seconds"),
-      end_time: z.number().int().positive().optional().describe("Absolute end time as UNIX timestamp in seconds"),
-      granularity: z.number().int().nonnegative().optional().describe("Time resolution in seconds for time series results. Use 0 for auto or omit."),
-      having: z.array(z.object({
+        column: z.string().min(1).trim().describe("MUST use field name 'column'. Column to order by. Required when sorting by a column directly."),
+        op: z.string().optional().describe("MUST use field name 'op' when provided. Operation to order by. Must match a calculation operation."),
+        order: z.enum(["ascending", "descending"]).optional().describe("MUST use field name 'order' when provided. Available values: \"ascending\" (low to high) or \"descending\" (high to low).")
+      })).optional().describe("MUST use field name 'orders' (not 'sort' or 'order_by'). Array of sort configurations."),
+      limit: z.number().int().positive().optional().describe("MUST use field name 'limit'. Maximum number of result rows to return."),
+      time_range: z.number().positive().optional().describe("MUST use field name 'time_range' (with underscore). Relative time range in seconds from now."),
+      start_time: z.number().int().positive().optional().describe("MUST use field name 'start_time' (with underscore). Absolute start timestamp in seconds."),
+      end_time: z.number().int().positive().optional().describe("MUST use field name 'end_time' (with underscore). Absolute end timestamp in seconds."),
+      granularity: z.number().int().nonnegative().optional().describe("MUST use field name 'granularity'. Time resolution in seconds. 0 for auto."),
+      havings: z.array(z.object({
         calculate_op: z.enum([
-          "COUNT",                // ⚠️ NO COLUMN ALLOWED
-          "CONCURRENCY",          // ⚠️ NO COLUMN ALLOWED
-          "SUM",                  // ✓ REQUIRES COLUMN
-          "AVG",                  // ✓ REQUIRES COLUMN
-          "COUNT_DISTINCT",       // ✓ REQUIRES COLUMN
-          "MAX",                  // ✓ REQUIRES COLUMN
-          "MIN",                  // ✓ REQUIRES COLUMN
-          "P001",                 // ✓ REQUIRES COLUMN
-          "P01",                  // ✓ REQUIRES COLUMN
-          "P05",                  // ✓ REQUIRES COLUMN
-          "P10",                  // ✓ REQUIRES COLUMN
-          "P20",                  // ✓ REQUIRES COLUMN
-          "P25",                  // ✓ REQUIRES COLUMN
-          "P50",                  // ✓ REQUIRES COLUMN
-          "P75",                  // ✓ REQUIRES COLUMN
-          "P80",                  // ✓ REQUIRES COLUMN
-          "P90",                  // ✓ REQUIRES COLUMN
-          "P95",                  // ✓ REQUIRES COLUMN
-          "P99",                  // ✓ REQUIRES COLUMN
-          "P999",                 // ✓ REQUIRES COLUMN
-          "RATE_AVG",             // ✓ REQUIRES COLUMN
-          "RATE_SUM",             // ✓ REQUIRES COLUMN
-          "RATE_MAX"              // ✓ REQUIRES COLUMN
-        ]).describe("⚠️⚠️⚠️ HAVING RULES: 'COUNT' and 'CONCURRENCY' CANNOT have a column. All other operations MUST have a column."),
-        column: z.string().min(1).trim().optional().describe("⚠️⚠️⚠️ COLUMN RULES: 1) NEVER provide a column for COUNT or CONCURRENCY, 2) ALWAYS provide a column for ALL other operations."),
-        op: z.enum(["=", "!=", ">", ">=", "<", "<="]).describe("Comparison operator for the having clause"),
-        value: z.number().describe("Numeric threshold value to compare against")
-      })).optional().describe("Post-calculation filters to apply to results. Used to filter based on calculation outcomes.")
+          "COUNT",               
+          "CONCURRENCY",         
+          "SUM",                 
+          "AVG",                 
+          "COUNT_DISTINCT",      
+          "MAX",                 
+          "MIN",                 
+          "P001",                
+          "P01",                 
+          "P05",                 
+          "P10",                 
+          "P20",                 
+          "P25",                 
+          "P50",                 
+          "P75",                 
+          "P80",                 
+          "P90",                 
+          "P95",                 
+          "P99",                 
+          "P999",                
+          "RATE_AVG",            
+          "RATE_SUM",            
+          "RATE_MAX"             
+        ]).describe(`MUST use field name 'calculate_op'. Available operations:
+- NO COLUMN ALLOWED: COUNT, CONCURRENCY
+- REQUIRE COLUMN: SUM, AVG, COUNT_DISTINCT, MAX, MIN, P001, P01, P05, P10, P20, P25, P50, P75, P80, P90, P95, P99, P999, RATE_AVG, RATE_SUM, RATE_MAX`),
+        column: z.string().min(1).trim().optional().describe("MUST use field name 'column'. NEVER use with COUNT/CONCURRENCY. REQUIRED for all other operations."),
+        op: z.enum(["=", "!=", ">", ">=", "<", "<="]).describe("MUST use field name 'op'. Available comparison operators: \"=\", \"!=\", \">\", \">=\", \"<\", \"<=\""),
+        value: z.number().describe("MUST use field name 'value'. Numeric threshold value to compare against.")
+      })).optional().describe("MUST use field name 'havings'. Post-calculation filters with same column rules as calculations.")
     },
     /**
      * Handles the run_query tool request
@@ -173,15 +224,64 @@ export function createRunQueryTool(api: HoneycombAPI) {
      */
     handler: async (params: any) => {
       try {
-        // Validate COUNT operations don't have columns and others do
+        // Handle query object nesting - common mistake is to put params inside a 'query' property
+        if (params.query && typeof params.query === 'object' && params.environment && params.dataset) {
+          console.warn("Detected nested query object - pulling properties to top level");
+          // Merge query properties into top level, but don't overwrite existing top-level properties
+          for (const [key, value] of Object.entries(params.query)) {
+            if (params[key] === undefined) {
+              params[key] = value;
+            }
+          }
+          
+          // We've processed the query object, now delete it to avoid confusion
+          delete params.query;
+        }
+        
+        // Handle common field name mistakes
+        if (params.group_by && !params.breakdowns) {
+          params.breakdowns = params.group_by;
+          delete params.group_by;
+          console.warn("Detected 'group_by' field - renamed to 'breakdowns'");
+        }
+        
+        // Handle order_by -> orders conversion
+        if (params.order_by && !params.orders) {
+          // Convert single order_by object to orders array
+          if (!Array.isArray(params.order_by)) {
+            params.orders = [params.order_by];
+          } else {
+            params.orders = params.order_by;
+          }
+          delete params.order_by;
+          console.warn("Detected 'order_by' field - renamed to 'orders'");
+        }
+        
+        // Handle having -> havings conversion
+        if (params.having && !params.havings) {
+          params.havings = params.having;
+          delete params.having;
+          console.warn("Detected 'having' field - renamed to 'havings'");
+        }
+        
+        // Validate calculations array and field names
         if (params.calculations) {
           for (const calc of params.calculations) {
-            if ((calc.op === "COUNT" || calc.op === "CONCURRENCY") && calc.column) {
-              throw new Error(`Error: ${calc.op} operation MUST NOT have a column specified. Current: {"op": "${calc.op}", "column": "${calc.column}"}. Correct: {"op": "${calc.op}"}`);
+            // Handle operation -> op conversion if needed
+            if (calc.operation && !calc.op) {
+              calc.op = calc.operation;
+              delete calc.operation;
+              console.warn("Detected 'operation' field in calculation - renamed to 'op'");
             }
-            if (!(calc.op === "COUNT" || calc.op === "CONCURRENCY") && !calc.column) {
-              throw new Error(`Error: ${calc.op} operation REQUIRES a column to be specified. Current: {"op": "${calc.op}"}. Correct: {"op": "${calc.op}", "column": "some_column_name"}`);
+            
+            // Handle field -> column conversion if needed
+            if (calc.field && !calc.column) {
+              calc.column = calc.field;
+              delete calc.field;
+              console.warn("Detected 'field' field in calculation - renamed to 'column'");
             }
+            
+            // We now rely on Zod schema refinements for validation of column rules
           }
         }
         

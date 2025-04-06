@@ -527,6 +527,7 @@ export class HoneycombAPI {
       time_range: params.timeRange || 3600,
       orders: [
         {
+          column: params.column,
           op: "COUNT",
           order: "descending",
         },
@@ -541,6 +542,10 @@ export class HoneycombAPI {
         { op: "MAX", column: params.column },
         { op: "MIN", column: params.column },
       ];
+      
+      if (!query.calculations) {
+        query.calculations = [];
+      }
       query.calculations.push(...numericCalculations);
     }
 

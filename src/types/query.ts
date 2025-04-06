@@ -30,9 +30,9 @@ export interface QueryFilter {
 export type QueryOrderDirection = "ascending" | "descending";
 
 export interface QueryOrder {
-  column?: string;
-  op: string;
-  order: QueryOrderDirection;
+  column: string;
+  op?: string;
+  order?: QueryOrderDirection;
 }
 
 export interface QueryHaving {
@@ -43,7 +43,7 @@ export interface QueryHaving {
 }
 
 export interface AnalysisQuery {
-  calculations: QueryCalculation[];
+  calculations?: QueryCalculation[];
   breakdowns?: string[];
   filters?: QueryFilter[];
   filter_combination?: "AND" | "OR";
@@ -53,7 +53,7 @@ export interface AnalysisQuery {
   start_time?: number;
   end_time?: number;
   granularity?: number;
-  having?: QueryHaving[];
+  havings?: QueryHaving[];
 }
 
 interface QueryResultData {

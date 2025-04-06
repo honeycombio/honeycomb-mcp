@@ -154,15 +154,16 @@ describe('run-query tool', () => {
   it('should include orders data', async () => {
     const paramsWithOrders = {
       ...testParams,
+      breakdowns: ['duration_ms'],
       orders: [
-        { op: 'COUNT' as const, order: 'descending' as const }
+        { column: 'duration_ms', order: 'descending' as const }
       ]
     };
 
     // Mock the API response with the correct format
     mockApi.runAnalysisQuery.mockResolvedValue({
-      results: [{ service: 'api', COUNT: 100 }],
-      meta: { orders: [{ op: 'COUNT', order: 'descending' }] }
+      results: [{ duration_ms: 100, COUNT: 5 }],
+      meta: { orders: [{ column: 'duration_ms', order: 'descending' }] }
     });
 
     const tool = createRunQueryTool(mockApi as any);
@@ -198,7 +199,7 @@ describe('run-query tool', () => {
     const invalidParams = {
       ...testParams,
       orders: [
-        { op: 'HEATMAP' as const, order: 'ascending' as const }
+        { column: 'duration_ms', op: 'HEATMAP' as const, order: 'ascending' as const }
       ]
     };
 

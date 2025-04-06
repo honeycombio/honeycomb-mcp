@@ -26,7 +26,17 @@ function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {
   const hasStartTime = start_time !== undefined;
   const hasEndTime = end_time !== undefined;
 
-  // Basic validation now handled by Zod schema refinements
+  // Check if all three time parameters are specified, which is invalid
+  if (hasTimeRange && hasStartTime && hasEndTime) {
+    throw new QueryError(
+      "Cannot specify time_range, start_time, and end_time together",
+      [
+        "Use either time_range alone",
+        "Or start_time and end_time together",
+        "Or time_range with either start_time or end_time"
+      ]
+    );
+  }
   
   if (hasTimeRange) {
     explicitTimeSpan = time_range;
@@ -65,9 +75,15 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
   // Time parameters validation
   validateTimeParameters(params);
 
+  // Add default calculations if none are provided
+  if (!params.calculations) {
+    params.calculations = [{ op: "COUNT" }];
+  }
+
   // Check if orders reference valid operations
   if (params.orders) {
     for (const order of params.orders) {
+      // Check if column exists in breakdowns or calculations
       if (order.column && params.breakdowns && !params.breakdowns.includes(order.column) && 
           !params.calculations.some((calc: { op: string; column?: string }) => calc.column === order.column)) {
         throw new QueryError(
@@ -79,6 +95,7 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
         );
       }
       
+      // Prevent using HEATMAP in orders
       if (order.op === "HEATMAP") {
         throw new QueryError(
           "HEATMAP cannot be used in orders.",
@@ -86,7 +103,8 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
         );
       }
       
-      if (!order.column && !["COUNT", "CONCURRENCY"].includes(order.op)) {
+      // Ensure column is present for operations that require it, except when sorting by breakdown column directly
+      if (order.op && !order.column && !["COUNT", "CONCURRENCY"].includes(order.op)) {
         throw new QueryError(
           `Operation '${order.op}' requires a column unless it is COUNT or CONCURRENCY.`,
           [
@@ -98,9 +116,9 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
     }
   }
 
-  // Validate having clauses
-  if (params.having) {
-    for (const having of params.having) {
+  // Validate havings clauses
+  if (params.havings) {
+    for (const having of params.havings) {
       const matchingCalculation = params.calculations.some((calc: { op: string; column?: string }) => {
         if ((calc.op === "COUNT" || calc.op === "CONCURRENCY") && 
             having.calculate_op === calc.op) {
@@ -112,9 +130,9 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
       
       if (!matchingCalculation) {
         throw new QueryError(
-          `HAVING clause with calculate_op '${having.calculate_op}' ${having.column ? `and column '${having.column}'` : ''} must refer to one of the calculations.`,
+          `HAVINGS clause with calculate_op '${having.calculate_op}' ${having.column ? `and column '${having.column}'` : ''} must refer to one of the calculations.`,
           [
-            "Ensure your HAVING clause references a calculation defined in your query",
+            "Ensure your HAVINGS clause references a calculation defined in your query",
             "Add the missing calculation to your query"
           ]
         );
@@ -159,11 +177,17 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
     });
   }
 
-  // Validate orders
+  // Validate orders match calculations when both op and column are specified
   if (params.orders) {
     // Check if any order references a non-existent calculation
     params.orders.forEach((order) => {
+      // Only validate orders that specify both op and column for a calculation
       if (order.op && order.column) {
+        // Skip validation when the column is in breakdowns (directly sortable)
+        if (params.breakdowns?.includes(order.column)) {
+          return;
+        }
+        
         const matchingCalc = params.calculations?.find(
           (calc: { op: string; column?: string }) => calc.op === order.op && calc.column === order.column
         );

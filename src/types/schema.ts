@@ -80,10 +80,15 @@ export const FilterOperatorSchema = z.enum([
   "does-not-contain",
   "in",
   "not-in",
-]).describe("Filter operator for comparing column values. Use string operators for text columns and mathematical operators for numeric columns.");
+]).describe(`Available filter operators:
+- Equality: "=", "!="
+- Comparison: ">", ">=", "<", "<="
+- String: "starts-with", "does-not-start-with", "ends-with", "does-not-end-with", "contains", "does-not-contain"
+- Existence: "exists", "does-not-exist"
+- Arrays: "in", "not-in" (use with array values)`);
 
 export const FilterSchema = z.object({
-  column: z.string().min(1).trim().describe("The name of the column to filter on"),
+  column: z.string().min(1).trim().describe("Column name to filter on"),
   op: FilterOperatorSchema,
   value: z
     .union([
@@ -94,47 +99,49 @@ export const FilterSchema = z.object({
       z.array(z.number()),
     ])
     .optional()
-    .describe("The value to compare against. Optional for exists/does-not-exist operators. For 'in'/'not-in' operators, provide an array of values."),
-}).describe("Filter definition for Honeycomb queries. Filters are applied before any calculations or aggregations.");
+    .describe("Comparison value. Optional for exists/does-not-exist operators. Use arrays for in/not-in operators."),
+}).describe("Pre-calculation filter. Restricts which events are included before aggregation.");
 
 export const OrderDirectionSchema = z.enum(["ascending", "descending"])
-  .describe("Sort direction for query results");
+  .describe("Available sort directions: \"ascending\" (low to high) or \"descending\" (high to low)");
 
 export const OrderSchema = z.object({
-  column: z.string().min(1).trim().optional().describe("The column to order by. Optional for COUNT and CONCURRENCY operations"),
-  op: z.string().describe("The operation to order by. Must be one of the calculation operations except HEATMAP"),
-  order: OrderDirectionSchema,
-}).describe("Specifies how to order query results. Orders are applied after calculations are performed.");
+  column: z.string().min(1).trim().describe("Column to order by. Required field. Can reference a column in breakdowns or be used with op for calculations."),
+  op: z.string().optional().describe("Operation to order by. When provided, must match a calculation operation (except HEATMAP)."),
+  order: OrderDirectionSchema.optional().describe("Sort direction. Default is \"ascending\" if not specified."),
+}).describe("Result ordering configuration. Must reference columns in breakdowns or calculations. Examples: {\"column\": \"user_id\"} or {\"column\": \"duration_ms\", \"op\": \"P99\", \"order\": \"descending\"}");
 
 export const QueryCalculationSchema = z.object({
   op: z.enum([
-    "COUNT",        // Count of events (no column required)
-    "CONCURRENCY",  // Concurrent operations (no column required)
-    "SUM",          // Sum of values in column
-    "AVG",          // Average of values in column
-    "COUNT_DISTINCT", // Count of unique values
-    "MAX",          // Maximum value in column
-    "MIN",          // Minimum value in column
-    "P001",         // 0.1th percentile
-    "P01",          // 1st percentile
-    "P05",          // 5th percentile
-    "P10",          // 10th percentile
-    "P20",          // 20th percentile
-    "P25",          // 25th percentile (first quartile)
-    "P50",          // 50th percentile (median)
-    "P75",          // 75th percentile (third quartile)
-    "P80",          // 80th percentile
-    "P90",          // 90th percentile
-    "P95",          // 95th percentile
-    "P99",          // 99th percentile
-    "P999",         // 99.9th percentile
-    "RATE_AVG",     // Rate of change in average
-    "RATE_SUM",     // Rate of change in sum
-    "RATE_MAX",     // Rate of change in maximum
-    "HEATMAP",      // Heat map visualization
-  ]).describe("The calculation operation to perform on the data. IMPORTANT: COUNT and CONCURRENCY MUST NOT have a column. All others REQUIRE a column."),
-  column: z.string().min(1).trim().optional().describe("The column to perform the calculation on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. DO NOT provide a column for COUNT or CONCURRENCY operations."),
-}).describe("Defines a calculation to perform on the dataset. Honeycomb is a column-oriented database, and calculations aggregate values across events.");
+    "COUNT",        
+    "CONCURRENCY",  
+    "SUM",          
+    "AVG",          
+    "COUNT_DISTINCT",
+    "MAX",          
+    "MIN",          
+    "P001",         
+    "P01",          
+    "P05",          
+    "P10",          
+    "P20",          
+    "P25",          
+    "P50",          
+    "P75",          
+    "P80",          
+    "P90",          
+    "P95",          
+    "P99",          
+    "P999",         
+    "RATE_AVG",     
+    "RATE_SUM",     
+    "RATE_MAX",     
+    "HEATMAP",      
+  ]).describe(`Available operations:
+- NO COLUMN ALLOWED: COUNT (count of events), CONCURRENCY (concurrent operations)
+- REQUIRE COLUMN: SUM, AVG, COUNT_DISTINCT, MAX, MIN, P001, P01, P05, P10, P20, P25, P50, P75, P80, P90, P95, P99, P999, RATE_AVG, RATE_SUM, RATE_MAX, HEATMAP`),
+  column: z.string().min(1).trim().optional().describe("Column to perform calculation on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. Do not include for COUNT or CONCURRENCY."),
+}).describe("Calculation to perform. Column rule: never use column with COUNT/CONCURRENCY; required for all other operations.");
 
 export const HavingSchema = z.object({
   calculate_op: z.enum([
@@ -162,27 +169,29 @@ export const HavingSchema = z.object({
     "RATE_SUM",
     "RATE_MAX"
     // Note: HEATMAP is not allowed in HAVING clauses
-  ]).describe("The calculation operation to filter by. IMPORTANT: COUNT and CONCURRENCY MUST NOT have a column. All others REQUIRE a column."),
-  column: z.string().min(1).trim().optional().describe("The column to filter on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. DO NOT provide a column for COUNT or CONCURRENCY operations."),
-  op: z.enum(["=", "\!=", ">", ">=", "<", "<="]).describe("Comparison operator for the having clause"),
+  ]).describe(`Available operations for having clause:
+- NO COLUMN ALLOWED: COUNT (count of events), CONCURRENCY (concurrent operations)
+- REQUIRE COLUMN: SUM, AVG, COUNT_DISTINCT, MAX, MIN, P001, P01, P05, P10, P20, P25, P50, P75, P80, P90, P95, P99, P999, RATE_AVG, RATE_SUM, RATE_MAX`),
+  column: z.string().min(1).trim().optional().describe("Column to filter on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. Do not include for COUNT or CONCURRENCY."),
+  op: z.enum(["=", "\!=", ">", ">=", "<", "<="]).describe("Available comparison operators: \"=\", \"!=\", \">\", \">=\", \"<\", \"<=\""),
   value: z.number().describe("Numeric threshold value to compare against"),
-}).describe("A HAVING clause for filtering results after calculations are performed. Only results that match this condition will be included.");
+}).describe("Post-calculation filter. Column rule: never use column with COUNT/CONCURRENCY; required for all other operations.");
 
 export const QueryToolSchema = z.object({
-  environment: z.string().min(1).trim().describe("The Honeycomb environment to query"),
-  dataset: z.string().min(1).trim().describe("The dataset to query. Use __all__ to query across all datasets in the environment."),
-  calculations: z.array(QueryCalculationSchema).describe("List of calculations to perform on the dataset. At least one calculation is required."),
-  breakdowns: z.array(z.string().min(1).trim()).optional().describe("Columns to group results by. Creates separate results for each unique combination of values in these columns."),
-  filters: z.array(FilterSchema).optional().describe("Pre-calculation filters to apply to the data. Restricts which events are included in the analysis."),
-  filter_combination: z.enum(["AND", "OR"]).optional().describe("How to combine multiple filters. AND requires all filters to match; OR requires any filter to match. Default is AND."),
-  orders: z.array(OrderSchema).optional().describe("How to sort the results. Can only reference columns in breakdowns or operations in calculations."),
+  environment: z.string().min(1).trim().describe("Honeycomb environment to query"),
+  dataset: z.string().min(1).trim().describe("Dataset to query. Use __all__ for all datasets in the environment."),
+  calculations: z.array(QueryCalculationSchema).optional().describe("List of calculations to perform. If omitted, COUNT is applied automatically."),
+  breakdowns: z.array(z.string().min(1).trim()).optional().describe("Columns to group results by. Creates separate results for each unique value combination."),
+  filters: z.array(FilterSchema).optional().describe("Pre-calculation filters to restrict which events are included."),
+  filter_combination: z.enum(["AND", "OR"]).optional().describe("How to combine filters. AND = all must match; OR = any can match. Default: AND."),
+  orders: z.array(OrderSchema).optional().describe("How to sort results. Can only reference columns in breakdowns or calculations."),
   limit: z.number().int().positive().optional().describe("Maximum number of result rows to return"),
-  time_range: z.number().positive().optional().describe("Relative time range in seconds from now. E.g., 3600 for the last hour."),
+  time_range: z.number().positive().optional().describe("Relative time range in seconds from now (e.g., 3600 for last hour). Default: 2 hours."),
   start_time: z.number().int().positive().optional().describe("Absolute start time as UNIX timestamp in seconds"),
   end_time: z.number().int().positive().optional().describe("Absolute end time as UNIX timestamp in seconds"),
-  granularity: z.number().int().nonnegative().optional().describe("Time resolution in seconds for time series results. Use 0 for auto or omit."),
-  having: z.array(HavingSchema).optional().describe("Post-calculation filters to apply to results. Used to filter based on calculation outcomes."),
-}).describe("Honeycomb query parameters. Honeycomb is a column-oriented observability database optimized for high-cardinality data.").refine(data => {
+  granularity: z.number().int().nonnegative().optional().describe("Time resolution in seconds for query graph. Use 0 for auto or omit. Max: time_range/10, Min: time_range/1000."),
+  havings: z.array(HavingSchema).optional().describe("Post-calculation filters to apply to results after calculations. Each column/calculate_op must exist in calculations. Multiple havings allowed per column/calculate_op."),
+}).describe("Honeycomb query parameters. All fields are optional. If no calculations are provided, COUNT will be applied automatically. Use calculations with proper column rules (never use column with COUNT/CONCURRENCY).").refine(data => {
   // Ensure we're not providing both time_range and start_time+end_time
   const hasTimeRange = data.time_range !== undefined;
   const hasStartTime = data.start_time !== undefined;

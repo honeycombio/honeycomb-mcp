@@ -79,7 +79,7 @@ describe("Query validation", () => {
         dataset: "test",
         calculations: [{ op: "COUNT" as CalculationOp }],
         breakdowns: ["service", "duration"],
-        orders: [{ column: "service", order: "ascending" as OrderDirection, op: "" }]
+        orders: [{ column: "service", order: "ascending" as OrderDirection }]
       };
 
       expect(() => validateQuery(params)).not.toThrow();
@@ -93,7 +93,7 @@ describe("Query validation", () => {
           { op: "COUNT" as CalculationOp },
           { op: "AVG" as CalculationOp, column: "duration" }
         ],
-        orders: [{ op: "AVG" as CalculationOp, column: "duration", order: "descending" as OrderDirection }]
+        orders: [{ column: "duration", op: "AVG" as CalculationOp, order: "descending" as OrderDirection }]
       };
 
       expect(() => validateQuery(params)).not.toThrow();
@@ -105,7 +105,7 @@ describe("Query validation", () => {
         dataset: "test",
         calculations: [{ op: "COUNT" as CalculationOp }],
         breakdowns: ["service"],
-        orders: [{ column: "invalid_field", order: "ascending" as OrderDirection, op: "" }]
+        orders: [{ column: "invalid_field", order: "ascending" as OrderDirection }]
       };
 
       expect(() => validateQuery(params)).toThrow();
@@ -116,7 +116,7 @@ describe("Query validation", () => {
         environment: "prod",
         dataset: "test",
         calculations: [{ op: "HEATMAP" as CalculationOp, column: "duration" }],
-        orders: [{ op: "HEATMAP" as CalculationOp, column: "duration", order: "descending" as OrderDirection }]
+        orders: [{ column: "duration", op: "HEATMAP" as CalculationOp, order: "descending" as OrderDirection }]
       };
 
       expect(() => validateQuery(params)).toThrow();
@@ -124,7 +124,7 @@ describe("Query validation", () => {
   });
 
   describe("Having clause validation", () => {
-    it("validates having clauses reference valid calculations", () => {
+    it("validates havings clauses reference valid calculations", () => {
       const params = {
         environment: "prod",
         dataset: "test",
@@ -132,7 +132,7 @@ describe("Query validation", () => {
           { op: "COUNT" as CalculationOp },
           { op: "AVG" as CalculationOp, column: "duration" }
         ],
-        having: [
+        havings: [
           { calculate_op: "AVG" as HavingCalculateOp, column: "duration", op: ">" as HavingOp, value: 100 }
         ]
       };
@@ -140,12 +140,12 @@ describe("Query validation", () => {
       expect(() => validateQuery(params)).not.toThrow();
     });
 
-    it("rejects having clauses with invalid calculation references", () => {
+    it("rejects havings clauses with invalid calculation references", () => {
       const params = {
         environment: "prod",
         dataset: "test",
         calculations: [{ op: "COUNT" as CalculationOp }],
-        having: [
+        havings: [
           { calculate_op: "P99" as HavingCalculateOp, column: "duration", op: ">" as HavingOp, value: 100 }
         ]
       };
