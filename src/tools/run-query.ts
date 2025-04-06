@@ -77,39 +77,39 @@ async function executeQuery(
 export function createRunQueryTool(api: HoneycombAPI) {
   return {
     name: "run_query",
-    description: `Executes a Honeycomb query against a dataset or environment, performing validation and returning raw results along with statistical summaries. This tool handles construction, validation, execution, and summarization of Honeycomb queries. NOTE: use __all__ as a dataset name to run a query against an environment.`,
+    description: `⚠️⚠️⚠️ IMPORTANT: 'COUNT' and 'CONCURRENCY' operations MUST NOT have a 'column' specified. All other operations REQUIRE a 'column'. ⚠️⚠️⚠️ Executes a Honeycomb query against a dataset or environment, performing validation and returning raw results along with statistical summaries. NOTE: use __all__ as a dataset name to run a query against an environment.`,
     schema: {
       environment: z.string().min(1).trim().describe("The Honeycomb environment to query"),
       dataset: z.string().min(1).trim().describe("The dataset to query. Use __all__ to query across all datasets in the environment."),
       calculations: z.array(z.object({
         op: z.enum([
-          "COUNT",        // Count of events (no column required)
-          "CONCURRENCY",  // Concurrent operations (no column required)
-          "SUM",          // Sum of values in column 
-          "AVG",          // Average of values in column
-          "COUNT_DISTINCT", // Count of unique values
-          "MAX",          // Maximum value in column
-          "MIN",          // Minimum value in column
-          "P001",         // 0.1th percentile 
-          "P01",          // 1st percentile
-          "P05",          // 5th percentile
-          "P10",          // 10th percentile
-          "P20",          // 20th percentile
-          "P25",          // 25th percentile (first quartile)
-          "P50",          // 50th percentile (median)
-          "P75",          // 75th percentile (third quartile)
-          "P80",          // 80th percentile
-          "P90",          // 90th percentile
-          "P95",          // 95th percentile
-          "P99",          // 99th percentile
-          "P999",         // 99.9th percentile
-          "RATE_AVG",     // Rate of change in average
-          "RATE_SUM",     // Rate of change in sum
-          "RATE_MAX",     // Rate of change in maximum
-          "HEATMAP",      // Heat map visualization
-        ]).describe("The calculation operation to perform on the data. IMPORTANT: COUNT and CONCURRENCY MUST NOT have a column. All others REQUIRE a column."),
-        column: z.string().min(1).trim().optional().describe("The column to perform the calculation on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. DO NOT provide a column for COUNT or CONCURRENCY operations."),
-      })).describe("List of calculations to perform on the dataset. At least one calculation is required."),
+          "COUNT",                // ⚠️ NO COLUMN ALLOWED - counts all events
+          "CONCURRENCY",          // ⚠️ NO COLUMN ALLOWED - measures concurrent operations
+          "SUM",                  // ✓ REQUIRES COLUMN - sums values in column
+          "AVG",                  // ✓ REQUIRES COLUMN - averages values in column
+          "COUNT_DISTINCT",       // ✓ REQUIRES COLUMN - counts unique values
+          "MAX",                  // ✓ REQUIRES COLUMN - maximum value in column
+          "MIN",                  // ✓ REQUIRES COLUMN - minimum value in column
+          "P001",                 // ✓ REQUIRES COLUMN - 0.1th percentile
+          "P01",                  // ✓ REQUIRES COLUMN - 1st percentile
+          "P05",                  // ✓ REQUIRES COLUMN - 5th percentile
+          "P10",                  // ✓ REQUIRES COLUMN - 10th percentile
+          "P20",                  // ✓ REQUIRES COLUMN - 20th percentile
+          "P25",                  // ✓ REQUIRES COLUMN - 25th percentile (first quartile)
+          "P50",                  // ✓ REQUIRES COLUMN - 50th percentile (median)
+          "P75",                  // ✓ REQUIRES COLUMN - 75th percentile (third quartile)
+          "P80",                  // ✓ REQUIRES COLUMN - 80th percentile
+          "P90",                  // ✓ REQUIRES COLUMN - 90th percentile
+          "P95",                  // ✓ REQUIRES COLUMN - 95th percentile
+          "P99",                  // ✓ REQUIRES COLUMN - 99th percentile
+          "P999",                 // ✓ REQUIRES COLUMN - 99.9th percentile
+          "RATE_AVG",             // ✓ REQUIRES COLUMN - rate of change in average
+          "RATE_SUM",             // ✓ REQUIRES COLUMN - rate of change in sum
+          "RATE_MAX",             // ✓ REQUIRES COLUMN - rate of change in maximum
+          "HEATMAP",              // ✓ REQUIRES COLUMN - heat map visualization
+        ]).describe("⚠️⚠️⚠️ CALCULATION RULES: 'COUNT' and 'CONCURRENCY' operations CANNOT have a column. All other operations MUST have a column."),
+        column: z.string().min(1).trim().optional().describe("⚠️⚠️⚠️ COLUMN RULES: 1) NEVER provide a column for COUNT or CONCURRENCY, 2) ALWAYS provide a column for ALL other operations."),
+      })).describe("⚠️⚠️⚠️ List of calculations to perform. CRITICAL RULE: For 'COUNT' or 'CONCURRENCY', DO NOT include a column. For all other operations, a column IS REQUIRED."),
       breakdowns: z.array(z.string().min(1).trim()).optional().describe("Columns to group results by. Creates separate results for each unique combination of values in these columns."),
       filters: z.array(z.object({
         column: z.string().min(1).trim().describe("The name of the column to filter on"),
@@ -136,12 +136,31 @@ export function createRunQueryTool(api: HoneycombAPI) {
       granularity: z.number().int().nonnegative().optional().describe("Time resolution in seconds for time series results. Use 0 for auto or omit."),
       having: z.array(z.object({
         calculate_op: z.enum([
-          "COUNT", "CONCURRENCY", "SUM", "AVG", "COUNT_DISTINCT", 
-          "MAX", "MIN", "P001", "P01", "P05", "P10", "P20", "P25", 
-          "P50", "P75", "P80", "P90", "P95", "P99", "P999", 
-          "RATE_AVG", "RATE_SUM", "RATE_MAX"
-        ]).describe("The calculation operation to filter by. IMPORTANT: COUNT and CONCURRENCY MUST NOT have a column."),
-        column: z.string().min(1).trim().optional().describe("The column to filter on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY."),
+          "COUNT",                // ⚠️ NO COLUMN ALLOWED
+          "CONCURRENCY",          // ⚠️ NO COLUMN ALLOWED
+          "SUM",                  // ✓ REQUIRES COLUMN
+          "AVG",                  // ✓ REQUIRES COLUMN
+          "COUNT_DISTINCT",       // ✓ REQUIRES COLUMN
+          "MAX",                  // ✓ REQUIRES COLUMN
+          "MIN",                  // ✓ REQUIRES COLUMN
+          "P001",                 // ✓ REQUIRES COLUMN
+          "P01",                  // ✓ REQUIRES COLUMN
+          "P05",                  // ✓ REQUIRES COLUMN
+          "P10",                  // ✓ REQUIRES COLUMN
+          "P20",                  // ✓ REQUIRES COLUMN
+          "P25",                  // ✓ REQUIRES COLUMN
+          "P50",                  // ✓ REQUIRES COLUMN
+          "P75",                  // ✓ REQUIRES COLUMN
+          "P80",                  // ✓ REQUIRES COLUMN
+          "P90",                  // ✓ REQUIRES COLUMN
+          "P95",                  // ✓ REQUIRES COLUMN
+          "P99",                  // ✓ REQUIRES COLUMN
+          "P999",                 // ✓ REQUIRES COLUMN
+          "RATE_AVG",             // ✓ REQUIRES COLUMN
+          "RATE_SUM",             // ✓ REQUIRES COLUMN
+          "RATE_MAX"              // ✓ REQUIRES COLUMN
+        ]).describe("⚠️⚠️⚠️ HAVING RULES: 'COUNT' and 'CONCURRENCY' CANNOT have a column. All other operations MUST have a column."),
+        column: z.string().min(1).trim().optional().describe("⚠️⚠️⚠️ COLUMN RULES: 1) NEVER provide a column for COUNT or CONCURRENCY, 2) ALWAYS provide a column for ALL other operations."),
         op: z.enum(["=", "!=", ">", ">=", "<", "<="]).describe("Comparison operator for the having clause"),
         value: z.number().describe("Numeric threshold value to compare against")
       })).optional().describe("Post-calculation filters to apply to results. Used to filter based on calculation outcomes.")
