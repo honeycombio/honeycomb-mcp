@@ -132,9 +132,28 @@ export const QueryCalculationSchema = z.object({
     "RATE_SUM",     // Rate of change in sum
     "RATE_MAX",     // Rate of change in maximum
     "HEATMAP",      // Heat map visualization
-  ]).describe("The calculation operation to perform on the data. COUNT and CONCURRENCY don't require a column. All others do."),
-  column: z.string().min(1).trim().optional().describe("The column to perform the calculation on. Required for all operations except COUNT and CONCURRENCY."),
-}).describe("Defines a calculation to perform on the dataset. Honeycomb is a column-oriented database, and calculations aggregate values across events.");
+  ]).describe("The calculation operation to perform on the data. IMPORTANT: COUNT and CONCURRENCY MUST NOT have a column. All others REQUIRE a column."),
+  column: z.string().min(1).trim().optional().describe("The column to perform the calculation on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. DO NOT provide a column for COUNT or CONCURRENCY operations."),
+}).describe("Defines a calculation to perform on the dataset. Honeycomb is a column-oriented database, and calculations aggregate values across events.")
+.superRefine((data, ctx) => {
+  // Ensure COUNT and CONCURRENCY do not have columns
+  if ((data.op === "COUNT" || data.op === "CONCURRENCY") && data.column !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `The ${data.op} operation MUST NOT have a column specified. Remove the column attribute.`,
+      path: ["column"]
+    });
+  }
+  
+  // Ensure other operations have columns
+  if (!(data.op === "COUNT" || data.op === "CONCURRENCY") && data.column === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `The ${data.op} operation REQUIRES a column to be specified.`,
+      path: ["column"]
+    });
+  }
+});
 
 export const HavingSchema = z.object({
   calculate_op: z.enum([
@@ -163,10 +182,29 @@ export const HavingSchema = z.object({
     "RATE_MAX"
     // Note: HEATMAP is not allowed in HAVING clauses
   ]).describe("The calculation operation to filter by. Must be one of the operations used in a calculation."),
-  column: z.string().min(1).trim().optional().describe("The column to filter on. Required for all operations except COUNT and CONCURRENCY."),
+  column: z.string().min(1).trim().optional().describe("The column to filter on. REQUIRED for all operations EXCEPT COUNT and CONCURRENCY. DO NOT provide a column for COUNT or CONCURRENCY operations."),
   op: z.enum(["=", "!=", ">", ">=", "<", "<="]).describe("Comparison operator for the having clause"),
   value: z.number().describe("Numeric threshold value to compare against"),
-}).describe("A HAVING clause for filtering results after calculations are performed. Only results that match this condition will be included.");
+}).describe("A HAVING clause for filtering results after calculations are performed. Only results that match this condition will be included.")
+.superRefine((data, ctx) => {
+  // Ensure COUNT and CONCURRENCY do not have columns
+  if ((data.calculate_op === "COUNT" || data.calculate_op === "CONCURRENCY") && data.column !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `The ${data.calculate_op} operation MUST NOT have a column specified. Remove the column attribute.`,
+      path: ["column"]
+    });
+  }
+  
+  // Ensure other operations have columns
+  if (!(data.calculate_op === "COUNT" || data.calculate_op === "CONCURRENCY") && data.column === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `The ${data.calculate_op} operation REQUIRES a column to be specified.`,
+      path: ["column"]
+    });
+  }
+});
 
 export const QueryToolSchema = z.object({
   environment: z.string().min(1).trim().describe("The Honeycomb environment to query"),
