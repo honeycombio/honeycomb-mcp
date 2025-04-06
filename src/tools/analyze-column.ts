@@ -32,7 +32,7 @@ export function createAnalyzeColumnTool(api: HoneycombAPI) {
   return {
     name: "analyze_column",
     description: "Analyzes a specific column in a dataset by running statistical queries and returning computed metrics. This tool allows users to get statistical information about a specific column, including value distribution, top values, and numeric statistics (for numeric columns).",
-    schema: ColumnAnalysisSchema.shape,
+    schema: ColumnAnalysisSchema,
     /**
      * Handles the analyze_column tool request
      * 
@@ -41,16 +41,8 @@ export function createAnalyzeColumnTool(api: HoneycombAPI) {
      */
     handler: async (params: z.infer<typeof ColumnAnalysisSchema>) => {
       try {
-        // Validate required parameters
-        if (!params.environment) {
-          throw new Error("Missing required parameter: environment");
-        }
-        if (!params.dataset) {
-          throw new Error("Missing required parameter: dataset");
-        }
-        if (!params.column) {
-          throw new Error("Missing required parameter: column");
-        }
+        // No manual validation needed here - the zod schema handles required fields
+        // and validation automatically through the MCP framework
         
         // Execute the analysis via the API
         const result = await api.analyzeColumn(params.environment, params.dataset, params);

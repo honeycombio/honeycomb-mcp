@@ -3,6 +3,9 @@ import { QueryToolSchema } from "../types/schema.js";
 import { QueryError } from "../utils/errors.js";
 
 function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {
+  // Most basic validation is now handled by the Zod schema refinements
+  // This function now focuses on more complex validation rules
+  
   // DA RULEZ:
   // 
   // A range of time need not exist (it will default to 2hrs).
@@ -23,13 +26,8 @@ function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {
   const hasStartTime = start_time !== undefined;
   const hasEndTime = end_time !== undefined;
 
-  if (hasTimeRange && hasStartTime && hasEndTime) {
-    throw new QueryError(
-      "Invalid time parameters: time_range, start_time, and end_time cannot all be specified together",
-      ["Only one of time_range, time range and start_time, or time range and end_time can be specified"]
-    );
-  }
-
+  // Basic validation now handled by Zod schema refinements
+  
   if (hasTimeRange) {
     explicitTimeSpan = time_range;
     if (hasStartTime) {
@@ -40,13 +38,7 @@ function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {
   } else if (hasStartTime && hasEndTime) {
     // Both start_time and end_time exist
     explicitTimeSpan = end_time - start_time;
-    
-    if (explicitTimeSpan <= 0) {
-      throw new QueryError(
-        "Invalid time parameters: negative time range",
-        ["Ensure that end_time is after start_time"]
-      );
-    }
+    // The negative time range check is now handled by Zod schema refinements
   }
   
   // Validate granularity if specified

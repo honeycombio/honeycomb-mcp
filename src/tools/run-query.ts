@@ -78,7 +78,7 @@ export function createRunQueryTool(api: HoneycombAPI) {
   return {
     name: "run_query",
     description: `Executes a Honeycomb query against a dataset or environment, performing validation and returning raw results along with statistical summaries. This tool handles construction, validation, execution, and summarization of Honeycomb queries. NOTE: use __all__ as a dataset name to run a query against an environment.`,
-    schema: QueryToolSchema.shape,
+    schema: QueryToolSchema,
     /**
      * Handles the run_query tool request
      * 
