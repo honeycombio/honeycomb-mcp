@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createAnalyzeColumnTool } from './analyze-column.js';
+import { createAnalyzeColumnsTool } from './analyze-columns.js';
 import { HoneycombError } from '../utils/errors.js';
 
-describe('analyze-column tool', () => {
+describe('analyze-columns tool', () => {
   // Mock API
   const mockApi = {
-    analyzeColumn: vi.fn()
+    analyzeColumns: vi.fn()
   };
 
   // Reset mocks before each test
@@ -17,13 +17,13 @@ describe('analyze-column tool', () => {
   const testParams = {
     environment: 'test-env',
     dataset: 'test-dataset',
-    column: 'test-column'
+    columns: ['test-column1', 'test-column2']
   };
 
   it('should return a valid tool configuration', () => {
-    const tool = createAnalyzeColumnTool(mockApi as any);
+    const tool = createAnalyzeColumnsTool(mockApi as any);
     
-    expect(tool).toHaveProperty('name', 'analyze_column');
+    expect(tool).toHaveProperty('name', 'analyze_columns');
     expect(tool).toHaveProperty('schema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
@@ -31,30 +31,32 @@ describe('analyze-column tool', () => {
 
   it('should process numeric data correctly', async () => {
     // Setup mock API response
-    mockApi.analyzeColumn.mockResolvedValue({
+    mockApi.analyzeColumns.mockResolvedValue({
       data: {
         results: [
           { 
-            'test-column': 'value1', 
+            'test-column1': 'value1',
+            'test-column2': 'valueA',
             COUNT: 10,
-            AVG: 15.5,
-            P95: 20,
-            MAX: 30,
-            MIN: 5
+            'AVG(test-column1)': 15.5,
+            'P95(test-column1)': 20,
+            'MAX(test-column1)': 30,
+            'MIN(test-column1)': 5
           },
           { 
-            'test-column': 'value2', 
+            'test-column1': 'value2',
+            'test-column2': 'valueB',
             COUNT: 5
           }
         ]
       }
     });
 
-    const tool = createAnalyzeColumnTool(mockApi as any);
+    const tool = createAnalyzeColumnsTool(mockApi as any);
     const result = await tool.handler(testParams);
 
     // Verify API was called with correct parameters
-    expect(mockApi.analyzeColumn).toHaveBeenCalledWith(
+    expect(mockApi.analyzeColumns).toHaveBeenCalledWith(
       testParams.environment,
       testParams.dataset,
       testParams
@@ -70,26 +72,28 @@ describe('analyze-column tool', () => {
     const response = JSON.parse(result.content[0]!.text!);
     
     // Verify contents
-    expect(response).toHaveProperty('column', 'test-column');
+    expect(response).toHaveProperty('columns');
+    expect(response.columns).toEqual(['test-column1', 'test-column2']);
     expect(response).toHaveProperty('count', 2);
     expect(response).toHaveProperty('totalEvents', 15);
     expect(response).toHaveProperty('topValues');
     expect(response.topValues).toHaveLength(2);
     expect(response).toHaveProperty('stats');
-    expect(response.stats).toHaveProperty('avg', 15.5);
-    expect(response.stats).toHaveProperty('interpretation');
+    expect(response.stats).toHaveProperty('test-column1');
+    expect(response.stats['test-column1']).toHaveProperty('avg', 15.5);
+    expect(response.stats['test-column1']).toHaveProperty('interpretation');
     expect(response).toHaveProperty('cardinality');
     expect(response.cardinality).toHaveProperty('uniqueCount', 2);
   });
 
   it('should handle empty results', async () => {
-    mockApi.analyzeColumn.mockResolvedValue({
+    mockApi.analyzeColumns.mockResolvedValue({
       data: {
         results: []
       }
     });
 
-    const tool = createAnalyzeColumnTool(mockApi as any);
+    const tool = createAnalyzeColumnsTool(mockApi as any);
     const result = await tool.handler(testParams);
 
     // Parse the JSON response
@@ -100,7 +104,7 @@ describe('analyze-column tool', () => {
     const response = JSON.parse(result.content[0]!.text!);
     
     // Verify simple response with no data
-    expect(response).toHaveProperty('column', 'test-column');
+    expect(response).toHaveProperty('columns', ['test-column1', 'test-column2']);
     expect(response).toHaveProperty('count', 0);
     expect(response).toHaveProperty('totalEvents', 0);
     expect(response).not.toHaveProperty('topValues');
@@ -111,14 +115,14 @@ describe('analyze-column tool', () => {
   it('should handle API errors', async () => {
     // Setup API to throw an error
     const apiError = new HoneycombError(404, 'Dataset not found');
-    mockApi.analyzeColumn.mockRejectedValue(apiError);
+    mockApi.analyzeColumns.mockRejectedValue(apiError);
 
     // Temporarily suppress console.error during this test
     const originalConsoleError = console.error;
     console.error = vi.fn();
     
     try {
-      const tool = createAnalyzeColumnTool(mockApi as any);
+      const tool = createAnalyzeColumnsTool(mockApi as any);
       const result = await tool.handler(testParams);
 
       // Verify error response

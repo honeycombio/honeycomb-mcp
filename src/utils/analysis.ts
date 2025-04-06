@@ -1,19 +1,17 @@
-/**
- * Utility functions for analyzing and interpreting data
- */
+import { CardinalityClassification, NumericStatistics } from "../types/analysis.js";
+
 
 /**
- * Interface for statistics used in analysis and interpretation
+ * Determine cardinality classification based on the number of unique values
+ * 
+ * @param uniqueCount - The number of unique values in the dataset
+ * @returns A classification of the cardinality (low, medium, high, very high)
  */
-export interface NumericStatistics {
-  min?: number;
-  max?: number;
-  avg?: number;
-  p95?: number;
-  median?: number;
-  sum?: number;
-  range?: number;
-  stdDev?: number;
+export function getCardinalityClassification(uniqueCount: number): CardinalityClassification {
+  if (uniqueCount <= 10) return 'low';
+  if (uniqueCount <= 100) return 'medium';
+  if (uniqueCount <= 1000) return 'high';
+  return 'very high';
 }
 
 /**

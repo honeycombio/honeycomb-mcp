@@ -1,6 +1,3 @@
-import { TopValueItem } from '../utils/functions.js';
-import { NumericStatistics } from '../utils/analysis.js';
-
 /**
  * Cardinality classification for column values
  */
@@ -12,6 +9,20 @@ export type CardinalityClassification = 'low' | 'medium' | 'high' | 'very high';
 export interface CardinalityInfo {
   uniqueCount: number;
   classification: CardinalityClassification;
+}
+
+/**
+ * Interface for statistics used in analysis and interpretation
+ */
+export interface NumericStatistics {
+  min?: number;
+  max?: number;
+  avg?: number;
+  p95?: number;
+  median?: number;
+  sum?: number;
+  range?: number;
+  stdDev?: number;
 }
 
 /**
@@ -34,17 +45,17 @@ export interface ValueWithPercentage {
  * Simplified column analysis result
  */
 export interface SimplifiedColumnAnalysis {
-  /** The name of the column being analyzed */
-  column: string;
+  /** The names of the columns being analyzed */
+  columns: string[];
   /** The number of results returned in the analysis */
   count: number;
   /** Total number of events/records across all results */
   totalEvents: number;
-  /** Most frequent values in the column with their counts */
+  /** Most frequent values in the columns with their counts */
   topValues?: Array<ValueWithPercentage>;
   /** Statistical information for numeric columns */
-  stats?: NumericStatsWithInterpretation;
-  /** Information about how many unique values exist in the column */
+  stats?: Record<string, NumericStatsWithInterpretation>;
+  /** Information about how many unique combinations exist */
   cardinality?: CardinalityInfo;
   /** Any error that occurred during result processing */
   processingError?: string;

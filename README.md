@@ -19,73 +19,9 @@ pnpm run build
 
 The build artifact goes into the `/build` folder.
 
-## Honeycomb Configuration
+## Configuration
 
-To use this MCP server, you need to provide Honeycomb API keys via environment variables. There are two ways to configure your Honeycomb environments:
-
-### Option 1: Single Environment (Simplest)
-
-Set a single API key for your primary Honeycomb environment:
-
-```bash
-# For MCP configuration
-HONEYCOMB_API_KEY=your_api_key
-```
-
-The environment name will be automatically detected from the Honeycomb API.
-
-### Option 2: Multiple Environments
-
-Set multiple environment variables for different Honeycomb environments:
-
-```bash
-# For multiple environments
-HONEYCOMB_ENV_PROD_API_KEY=your_prod_api_key
-HONEYCOMB_ENV_STAGING_API_KEY=your_staging_api_key
-HONEYCOMB_ENV_DEV_API_KEY=your_dev_api_key
-```
-
-Each environment will be accessible using the name in the environment variable
-(e.g., "prod", "staging", "dev"). You can also refer to the name of the
-Honeycomb Environment that each key corresponds to in the UI.
-
-### Optional Configuration
-
-You can also set an optional API endpoint (e.g., for Honeycomb EU customers):
-
-```bash
-# Optional custom API endpoint (defaults to https://api.honeycomb.io)
-HONEYCOMB_API_ENDPOINT=https://api.eu1.honeycomb.io/
-```
-
-### Caching Configuration
-
-The MCP server implements caching for all non-query Honeycomb API calls to improve performance and reduce API usage. Caching can be configured using these environment variables:
-
-```bash
-# Enable/disable caching (default: true)
-HONEYCOMB_CACHE_ENABLED=true
-
-# Default TTL in seconds (default: 300)
-HONEYCOMB_CACHE_DEFAULT_TTL=300
-
-# Resource-specific TTL values in seconds (defaults shown)
-HONEYCOMB_CACHE_DATASET_TTL=900    # 15 minutes
-HONEYCOMB_CACHE_COLUMN_TTL=900     # 15 minutes
-HONEYCOMB_CACHE_BOARD_TTL=900      # 15 minutes
-HONEYCOMB_CACHE_SLO_TTL=900        # 15 minutes
-HONEYCOMB_CACHE_TRIGGER_TTL=900    # 15 minutes
-HONEYCOMB_CACHE_MARKER_TTL=900     # 15 minutes
-HONEYCOMB_CACHE_RECIPIENT_TTL=900  # 15 minutes
-HONEYCOMB_CACHE_AUTH_TTL=3600      # 1 hour
-
-# Maximum cache size (items per resource type)
-HONEYCOMB_CACHE_MAX_SIZE=1000
-```
-
-## MCP Configuration
-
-You'll need to run `node` on the location of the build artifact and pass your Honeycomb environment variables:
+To use this MCP server, you need to provide Honeycomb API keys via environment variables in your MCP config.
 
 ```json
 {
@@ -122,9 +58,45 @@ For multiple environments:
 }
 ```
 
-You can also set these environment variables in your shell environment before starting the MCP client.
+**Important:** These environment variables **must** bet set in the `env` block of your MCP config.
 
-The above configuration has been tested with the following clients:
+### EU Configuration
+
+EU customers must also set a `HONEYCOMB_API_ENDPOINT` configuration, since the MCP defaults to the non-EU instance.
+
+```bash
+# Optional custom API endpoint (defaults to https://api.honeycomb.io)
+HONEYCOMB_API_ENDPOINT=https://api.eu1.honeycomb.io/
+```
+
+### Caching Configuration
+
+The MCP server implements caching for all non-query Honeycomb API calls to improve performance and reduce API usage. Caching can be configured using these environment variables:
+
+```bash
+# Enable/disable caching (default: true)
+HONEYCOMB_CACHE_ENABLED=true
+
+# Default TTL in seconds (default: 300)
+HONEYCOMB_CACHE_DEFAULT_TTL=300
+
+# Resource-specific TTL values in seconds (defaults shown)
+HONEYCOMB_CACHE_DATASET_TTL=900    # 15 minutes
+HONEYCOMB_CACHE_COLUMN_TTL=900     # 15 minutes
+HONEYCOMB_CACHE_BOARD_TTL=900      # 15 minutes
+HONEYCOMB_CACHE_SLO_TTL=900        # 15 minutes
+HONEYCOMB_CACHE_TRIGGER_TTL=900    # 15 minutes
+HONEYCOMB_CACHE_MARKER_TTL=900     # 15 minutes
+HONEYCOMB_CACHE_RECIPIENT_TTL=900  # 15 minutes
+HONEYCOMB_CACHE_AUTH_TTL=3600      # 1 hour
+
+# Maximum cache size (items per resource type)
+HONEYCOMB_CACHE_MAX_SIZE=1000
+```
+
+## Client compatibility
+
+Honeycomb MCP has been tested with the following clients:
 
 - [Claude Desktop](https://modelcontextprotocol.io/quickstart/user)
 - [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/tutorials#set-up-model-context-protocol-mcp)
@@ -190,14 +162,7 @@ The resource response includes:
   }
   ```
 
-- `analyze_column`: Get statistical analysis of a column
-  ```json
-  {
-    "environment": "production",
-    "dataset": "api-requests",
-    "column": "duration_ms"
-  }
-  ```
+- `analyze_columns`: Analyzes specific columns in a dataset by running statistical queries and returning computed metrics.
 
 - `list_slos`: List all SLOs for a dataset
   ```json

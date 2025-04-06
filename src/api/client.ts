@@ -510,20 +510,21 @@ export class HoneycombAPI {
     }
   }
 
-  async analyzeColumn(
+  async analyzeColumns(
     environment: string,
     datasetSlug: string,
     params: z.infer<typeof ColumnAnalysisSchema>,
   ) {
-    const column = await this.getColumnByName(
-      environment,
-      datasetSlug,
-      params.column,
+    // Get column information for each requested column
+    const columnPromises = params.columns.map(columnName => 
+      this.getColumnByName(environment, datasetSlug, columnName)
     );
-
+    
+    const columns = await Promise.all(columnPromises);
+    
     const query: AnalysisQuery = {
       calculations: [{ op: "COUNT" }],
-      breakdowns: [params.column],
+      breakdowns: [...params.columns],
       time_range: params.timeRange || 3600,
       orders: [
         {
@@ -535,19 +536,24 @@ export class HoneycombAPI {
       limit: 10,
     };
 
-    if (column.type === "integer" || column.type === "float") {
+    // Add numeric calculations for any numeric columns
+    const numericColumns = columns.filter(
+      col => col.type === "integer" || col.type === "float"
+    );
+    
+    numericColumns.forEach(column => {
       const numericCalculations: QueryCalculation[] = [
-        { op: "AVG", column: params.column },
-        { op: "P95", column: params.column },
-        { op: "MAX", column: params.column },
-        { op: "MIN", column: params.column },
+        { op: "AVG", column: column.key_name },
+        { op: "P95", column: column.key_name },
+        { op: "MAX", column: column.key_name },
+        { op: "MIN", column: column.key_name },
       ];
       
       if (!query.calculations) {
         query.calculations = [];
       }
       query.calculations.push(...numericCalculations);
-    }
+    });
 
     try {
       const results = await this.queryAndWaitForResults(

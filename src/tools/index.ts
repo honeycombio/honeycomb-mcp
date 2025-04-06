@@ -2,7 +2,7 @@ import { HoneycombAPI } from "../api/client.js";
 import { createListDatasetsTool } from "./list-datasets.js";
 import { createListColumnsTool } from "./list-columns.js";
 import { createRunQueryTool } from "./run-query.js";
-import { createAnalyzeColumnTool } from "./analyze-column.js";
+import { createAnalyzeColumnsTool } from "./analyze-columns.js";
 import { createListBoardsTool } from "./list-boards.js";
 import { createGetBoardTool } from "./get-board.js";
 import { createListMarkersTool } from "./list-markers.js";
@@ -30,7 +30,7 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
 
     // Query tools
     createRunQueryTool(api),
-    createAnalyzeColumnTool(api),
+    createAnalyzeColumnsTool(api),
 
     // Board tools
     createListBoardsTool(api),
@@ -67,8 +67,8 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
       async (args: Record<string, any>, extra: any) => {
         try {
           // Validate and ensure required fields are present before passing to handler
-          if (tool.name.includes("analyze_column") && (!args.environment || !args.dataset || !args.column)) {
-            throw new Error("Missing required fields: environment, dataset, and column are required");
+          if (tool.name.includes("analyze_columns") && (!args.environment || !args.dataset || !args.columns)) {
+            throw new Error("Missing required fields: environment, dataset, and columns are required");
           } else if (tool.name.includes("run_query") && (!args.environment || !args.dataset)) {
             throw new Error("Missing required fields: environment and dataset are required");
           }

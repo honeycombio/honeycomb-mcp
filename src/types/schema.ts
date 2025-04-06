@@ -215,20 +215,8 @@ export const QueryToolSchema = z.object({
 export const ColumnAnalysisSchema = z.object({
   environment: z.string().min(1).trim().describe("The Honeycomb environment containing the dataset"),
   dataset: z.string().min(1).trim().describe("The dataset containing the column to analyze"),
-  column: z.string().min(1).trim().describe("The name of the column to analyze"),
+  columns: z.array(z.string()).min(1).max(10).describe("The names of the columns to analyze"),
   timeRange: z.number().positive().optional().describe("Time range in seconds to analyze. Default is 2 hours."),
-  maxValues: z.number().int().positive().optional().describe("Maximum number of distinct values to return for the column. Default is 20."),
-}).describe("Parameters for analyzing a column in a Honeycomb dataset. Returns distribution and statistics about column values.").superRefine((data, ctx) => {
-  if (data.maxValues && data.maxValues > 100) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.too_big,
-      maximum: 100,
-      type: "number",
-      inclusive: true,
-      path: ["maxValues"],
-      message: "Maximum value count cannot exceed 100"
-    });
-  }
 });
 
 export const PromptSchema = z.object({
