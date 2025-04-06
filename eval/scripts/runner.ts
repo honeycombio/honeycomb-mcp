@@ -907,14 +907,16 @@ Please try again with correct parameters. Make sure to:
       let exampleBlock = '';
       if (tool.name === 'run_query') {
         exampleBlock = `
+⚠️ IMPORTANT RULE: For "COUNT" and "CONCURRENCY" operations, do NOT include a "column" field. For all other operations, a "column" field IS REQUIRED.
+
 Example:
 \`\`\`json
 {
   "environment": "${environment}",
   "dataset": "frontend", 
   "calculations": [
-    {"op": "COUNT"},
-    {"op": "AVG", "column": "duration_ms"}
+    {"op": "COUNT"},  // CORRECT: COUNT must NOT have a column
+    {"op": "AVG", "column": "duration_ms"}  // CORRECT: AVG requires a column
   ],
   "breakdowns": ["service.name"],
   "time_range": 3600,
@@ -923,6 +925,8 @@ Example:
   ]
 }
 \`\`\`
+
+DO NOT do this: {"op": "COUNT", "column": "some_field"} ❌
 `;
       } else if (tool.name === 'get_columns') {
         exampleBlock = `
@@ -997,6 +1001,12 @@ IMPORTANT CONTEXT:
 - Think step-by-step about what information you need and how to get it
 - Each tool call should build upon previous information
 - Explain your thought process at each step
+- When using run_query tool with COUNT or CONCURRENCY operations, NEVER include a column field
+
+⚠️ WARNING: For run_query tool calculations:
+- {"op": "COUNT", "column": "field"} ❌ INCORRECT - will cause errors
+- {"op": "COUNT"} ✓ CORRECT - use this format for COUNT operations
+- All other operations like AVG, SUM, MAX require a column
 `;
 
     if (prompt.context) {
@@ -1005,6 +1015,12 @@ IMPORTANT CONTEXT:
 
     // Instructions for agent's structured thinking
     agentContext += `
+⚠️ IMPORTANT: When using the run_query tool, follow these rules:
+1. For "COUNT" and "CONCURRENCY" operations, do NOT include a "column" field
+2. For all other operations (like AVG, MAX, MIN, etc.), a "column" field IS REQUIRED
+3. INCORRECT: {"op": "COUNT", "column": "some_field"} - this will cause errors
+4. CORRECT: {"op": "COUNT"} and {"op": "AVG", "column": "duration_ms"}
+
 FORMAT YOUR RESPONSE AS:
 \`\`\`json
 {
