@@ -1406,10 +1406,22 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
       const prompts = await this.loadPrompts();
       const results: EvalResult[] = [];
       
+      // Track if we're actually going to run any evaluations
+      let hasProvidersWithModels = false;
+      
       // For each provider
       for (const provider of this.config.providers) {
         // Get models for this provider
-        const providerModels = this.config.selectedModels.get(provider.name) || [provider.models[0]];
+        const providerModels = this.config.selectedModels.get(provider.name);
+        
+        // Skip providers that don't have any models in the selectedModels map
+        if (!providerModels || providerModels.length === 0) {
+          console.log(`Skipping provider ${provider.name} as no models were selected for it`);
+          continue;
+        }
+        
+        // Mark that we have at least one provider with models
+        hasProvidersWithModels = true;
         
         // For each model for this provider
         for (const modelName of providerModels) {
@@ -1435,6 +1447,13 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
             results.push(...batchResults);
           }
         }
+      }
+      
+      // Check if we had any providers with models
+      if (!hasProvidersWithModels) {
+        throw new Error(`No providers were found with models selected. Check your EVAL_MODELS configuration.
+Available providers: ${this.config.providers.map(p => p.name).join(', ')}
+Selected models: ${JSON.stringify(Object.fromEntries(this.config.selectedModels.entries()))}`);
       }
       
       // Save all results

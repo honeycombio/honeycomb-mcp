@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import { LLMProvider } from './types.js';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import mustache from 'mustache';
 
@@ -179,6 +180,93 @@ class AnthropicProvider implements LLMProvider {
     } catch (error) {
       console.error('Anthropic API error:', error);
       return `SCORE: 0\nPASSED: false\nREASONING: Error calling Anthropic API: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  getTokenUsage() {
+    return { 
+      ...this.tokenCounts,
+      ...this.toolTokenCounts
+    };
+  }
+}
+
+// Google Gemini provider implementation
+class GeminiProvider implements LLMProvider {
+  name = 'gemini';
+  models = ['gemini-2.0-flash-001', 'gemini-2.0-pro-001', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest'];
+  
+  // Track validation tokens (for judging)
+  private tokenCounts = { prompt: 0, completion: 0, total: 0 };
+  
+  // Track tool usage tokens separately
+  private toolTokenCounts = { toolPrompt: 0, toolCompletion: 0, toolTotal: 0 };
+  
+  // Flag to determine if a call is for validation or tool usage
+  private isToolCall = false;
+  private verbose = process.env.EVAL_VERBOSE === 'true';
+  
+  private client: GoogleGenAI;
+
+  constructor(private apiKey: string) {
+    this.client = new GoogleGenAI({apiKey: this.apiKey});
+  }
+
+  // Set the context for token tracking
+  setToolCallContext(isToolCall: boolean) {
+    this.isToolCall = isToolCall;
+  }
+
+  async runPrompt(prompt: string, model: string): Promise<string> {
+    try {
+      // Determine if this is for tool usage or validation
+      const isForTool = this.isToolCall;
+      if (this.verbose) {
+        console.log(`Running Google Gemini prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
+      }
+      
+      // Different system prompts based on context
+      const systemPrompt = isForTool ?
+        'You are an assistant helping with data analysis. Use the tools available to analyze data and answer questions.' : 
+        'You are an evaluation assistant that reviews tool responses and determines if they meet criteria. Format your response as SCORE: [0-1 number], PASSED: [true/false], REASONING: [your detailed explanation].';
+      
+      // Combine system prompt and user prompt
+      const fullPrompt = systemPrompt + '\n\n' + prompt;
+      
+      // Real API call - using the correct API structure
+      const response = await this.client.models.generateContent({
+        model: model,
+        contents: fullPrompt
+      });
+      
+      // Unfortunately, Gemini's token counts aren't available in the response
+      // We'll use estimates based on characters for now
+      const inputChars = fullPrompt.length;
+      const outputText = response.text || '';
+      const outputChars = outputText.length;
+      
+      // Rough estimate: 4 chars per token
+      const estimatedInputTokens = Math.round(inputChars / 4);
+      const estimatedOutputTokens = Math.round(outputChars / 4);
+      
+      // Update appropriate token counter based on context
+      if (isForTool) {
+        this.toolTokenCounts.toolPrompt += estimatedInputTokens;
+        this.toolTokenCounts.toolCompletion += estimatedOutputTokens;
+        this.toolTokenCounts.toolTotal = this.toolTokenCounts.toolPrompt + this.toolTokenCounts.toolCompletion;
+      } else {
+        this.tokenCounts.prompt += estimatedInputTokens;
+        this.tokenCounts.completion += estimatedOutputTokens;
+        this.tokenCounts.total = this.tokenCounts.prompt + this.tokenCounts.completion;
+      }
+      
+      // Reset context after call
+      this.isToolCall = false;
+
+      return outputText;
+    } catch (error) {
+      console.error('Google Gemini API error:', error);
+      return `SCORE: 0\nPASSED: false\nREASONING: Error calling Google Gemini API: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
@@ -427,6 +515,7 @@ async function main() {
     // Load environment variables for API keys
     const openaiApiKey = process.env.OPENAI_API_KEY;
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
     
     // Initialize providers array
     const providers: LLMProvider[] = [];
@@ -442,12 +531,18 @@ async function main() {
       console.log('Added Anthropic provider with API key');
     }
     
+    if (geminiApiKey) {
+      providers.push(new GeminiProvider(geminiApiKey));
+      console.log('Added Google Gemini provider with API key');
+    }
+    
     // Exit if no API keys are available
     if (providers.length === 0) {
       console.error('\nERROR: No valid API keys available.\n');
       console.error('You must set at least one of these environment variables:');
       console.error('  - OPENAI_API_KEY    for OpenAI models');
-      console.error('  - ANTHROPIC_API_KEY for Anthropic models\n');
+      console.error('  - ANTHROPIC_API_KEY for Anthropic models');
+      console.error('  - GEMINI_API_KEY    for Google Gemini models\n');
       console.error('For example: OPENAI_API_KEY=your_key pnpm run eval\n');
       process.exit(1);
     }
@@ -479,7 +574,8 @@ async function main() {
     // This can be either a string or an array of strings for each provider
     let selectedModels = new Map([
       ['openai', ['gpt-4o']],
-      ['anthropic', ['claude-3-5-haiku-latest']]
+      ['anthropic', ['claude-3-5-haiku-latest']],
+      ['gemini', ['gemini-2.0-flash-001']]
     ]);
     
     if (process.env.EVAL_MODELS) {

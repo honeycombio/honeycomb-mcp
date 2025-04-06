@@ -25,6 +25,7 @@
     "eval:report": "pnpm tsx eval/scripts/run-eval.ts report",
     "eval:update-index": "pnpm tsx eval/scripts/run-eval.ts update-index",
     "eval:all": "pnpm run build && pnpm run eval",
+    "eval:gemini": "pnpm run build && EVAL_MODELS='{\"gemini\":[\"gemini-2.0-flash-001\"]}' pnpm tsx eval/scripts/run-eval.ts run",
     "eval:list-datasets": "pnpm run build && pnpm tsx eval/scripts/run-eval.ts run test-list-datasets.json",
     "eval:analyze-latency": "pnpm run build && pnpm tsx eval/scripts/run-eval.ts run test-analyze-latency.json",
     "eval:investigate-errors": "pnpm run build && pnpm tsx eval/scripts/run-eval.ts run test-investigate-errors.json"
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@google/genai": "^0.7.0",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@total-typescript/tsconfig": "^1.0.4",
     "@types/mustache": "^4.2.5",
