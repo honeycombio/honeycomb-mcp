@@ -26,6 +26,7 @@ class OpenAIProvider implements LLMProvider {
   
   // Flag to determine if a call is for validation or tool usage
   private isToolCall = false;
+  private verbose = process.env.EVAL_VERBOSE === 'true';
   
   private client: OpenAI;
 
@@ -44,7 +45,9 @@ class OpenAIProvider implements LLMProvider {
     try {
       // Determine if this is for tool usage or validation
       const isForTool = this.isToolCall;
-      console.log(`Running OpenAI prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
+      if (this.verbose) {
+        console.log(`Running OpenAI prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
+      }
       
       // Different system prompts based on context
       const systemPrompt = isForTool ?
@@ -115,6 +118,7 @@ class AnthropicProvider implements LLMProvider {
   
   // Flag to determine if a call is for validation or tool usage
   private isToolCall = false;
+  private verbose = process.env.EVAL_VERBOSE === 'true';
   
   private client: Anthropic;
 
@@ -133,7 +137,9 @@ class AnthropicProvider implements LLMProvider {
     try {
       // Determine if this is for tool usage or validation
       const isForTool = this.isToolCall;
-      console.log(`Running Anthropic prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
+      if (this.verbose) {
+        console.log(`Running Anthropic prompt with model ${model} ${isForTool ? '(for tool usage)' : '(for validation)'}`);
+      }
       
       // Different system prompts based on context
       const systemPrompt = isForTool ?
@@ -327,13 +333,38 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
       
       // Format tool calls
       const hasToolCalls = result.toolCalls && result.toolCalls.length > 0;
-      const toolCalls = hasToolCalls ? result.toolCalls.map((call: any, idx: number) => ({
-        tool: call.tool || 'N/A',
-        index: idx + 1,
-        parametersJson: JSON.stringify(call.parameters || {}, null, 2),
-        responseJson: JSON.stringify(call.response || {}, null, 2),
-        callLatency: call.latencyMs || 0
-      })) : [];
+      const toolCalls = hasToolCalls ? result.toolCalls.map((call: any, idx: number) => {
+        // Format the summary properly
+        let formattedSummary = call.summary;
+        if (formattedSummary) {
+          // Check if it's an array
+          if (Array.isArray(formattedSummary)) {
+            formattedSummary = JSON.stringify(formattedSummary, null, 2);
+          }
+        }
+        
+        const toolName = call.tool || (call.complete ? 'Final Summary' : 'Thinking');
+        
+        return {
+          tool: toolName,
+          'tool.isThinking': toolName === 'Thinking',
+          'tool.isFinalSummary': toolName === 'Final Summary',
+          'tool.hasError': !!call.error || !!(call.response && call.response.error),
+          index: idx + 1,
+          step: call.step,
+          thought: call.thought,
+          plan: call.plan,
+          reasoning: call.reasoning,
+          summary: formattedSummary,
+          complete: call.complete,
+          error: call.error || (call.response && call.response.error ? 
+                     (typeof call.response.error === 'string' ? call.response.error : 
+                     (call.response.error.message || JSON.stringify(call.response.error, null, 2))) : null),
+          parametersJson: JSON.stringify(call.parameters || {}, null, 2),
+          responseJson: JSON.stringify(call.response || {}, null, 2),
+          callLatency: call.latencyMs || 0
+        };
+      }) : [];
       
       // Get agent scores if available
       const agentScores = result.validation.agentScores;
@@ -382,6 +413,7 @@ async function generateReport(summaryPath: string, outputPath: string): Promise<
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
+  const testFile = args[1]; // Add support for specifying a test file
   
   // Load environment variables from root .env file
   try {
@@ -485,7 +517,9 @@ async function main() {
       judge: {
         provider: config.judgeProvider,
         model: config.judgeModel
-      }
+      },
+      verbose: process.env.EVAL_VERBOSE === 'true',
+      testFile: testFile // Pass the specific test file to run, if specified
     };
     
     // For stdio-based MCP connection
@@ -534,9 +568,13 @@ async function main() {
   } else {
     console.log(`
 Usage:
-  run-eval run                    Run all evaluations
+  run-eval run [test-file]        Run evaluations (optionally specify a single test file)
   run-eval report [summary-path]  Generate report from a summary file
   run-eval update-index           Update the reports index.html file
+
+Examples:
+  run-eval run                    Run all tests
+  run-eval run simple-test.json   Run a specific test file
     `);
   }
 }

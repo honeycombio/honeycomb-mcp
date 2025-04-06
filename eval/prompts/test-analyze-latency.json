@@ -1,0 +1,26 @@
+{
+  "id": "test-analyze-latency",
+  "name": "Analyze Service Latency",
+  "description": "Tests the agent's ability to analyze latency metrics across services",
+  "prompt": "Analyze the ms-demo environment to identify which service has the highest average latency and determine if there are any patterns or correlations with error rates.",
+  "environment": "ms-demo",
+  "context": "Our engineering team is investigating performance issues across our microservices. We need to understand which service is experiencing the highest latency and whether these performance issues correlate with increased error rates.",
+  "expectedTools": ["list_datasets", "get_columns", "run_query"],
+  "maxSteps": 8,
+  "validation": {
+    "prompt": "Evaluate whether the agent successfully identified the service with the highest latency and analyzed potential correlations with error rates. The agent should have used appropriate tools in a logical sequence, starting with listing datasets, then exploring columns, and finally running meaningful queries. The analysis should include quantitative metrics and show whether there's a correlation between latency and errors.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Identified the service with the highest average latency with supporting data",
+        "Analyzed potential correlation between latency and error rates",
+        "Used appropriate tools in a logical sequence",
+        "Ran meaningful queries with correct parameters",
+        "Provided clear, data-driven insights"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 30000
+  }
+}

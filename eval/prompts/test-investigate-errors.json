@@ -1,0 +1,27 @@
+{
+  "id": "test-investigate-errors",
+  "name": "Investigate Error Patterns",
+  "description": "Tests the agent's ability to investigate error patterns across services",
+  "prompt": "Investigate HTTP error patterns in the ms-demo environment. Identify which endpoints or services have the highest error rates, what types of errors are occurring, and suggest possible causes based on the data.",
+  "environment": "ms-demo",
+  "context": "Our site reliability team has noticed an increase in errors across our services. We need to understand which services and endpoints are most affected, what types of errors are occurring, and get insights into potential root causes.",
+  "expectedTools": ["list_datasets", "get_columns", "run_query", "analyze_column"],
+  "maxSteps": 10,
+  "validation": {
+    "prompt": "Evaluate whether the agent successfully identified error patterns in the ms-demo environment. The agent should have identified services or endpoints with high error rates, categorized the types of errors, and provided data-driven insights about potential causes. The analysis should follow a logical progression, building on insights from previous steps. The agent should have used appropriate tools for each part of the investigation.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Identified services/endpoints with highest error rates using appropriate metrics",
+        "Categorized different error types or status codes",
+        "Analyzed correlations or patterns (e.g., time-based, service dependencies)",
+        "Used appropriate tools in a logical, progressive sequence",
+        "Provided data-driven hypotheses about potential causes",
+        "Communicated findings clearly with supporting data"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 40000
+  }
+}

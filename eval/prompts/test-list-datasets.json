@@ -1,0 +1,24 @@
+{
+  "id": "test-list-datasets",
+  "name": "List Datasets Test",
+  "description": "Tests the agent's ability to list datasets in a Honeycomb environment",
+  "prompt": "List all the datasets available in the ms-demo environment and provide a short summary of what each dataset might contain based on its name.",
+  "environment": "ms-demo",
+  "expectedTools": ["list_datasets"],
+  "maxSteps": 3,
+  "validation": {
+    "prompt": "Evaluate whether the agent successfully listed all datasets in the ms-demo environment and provided reasonable hypotheses about what each dataset might contain. The agent should have used the list_datasets tool and correctly included the environment parameter. The summary should be clear and concise.",
+    "expectedOutcome": {
+      "success": true,
+      "criteria": [
+        "Used the list_datasets tool with correct parameters",
+        "Listed all available datasets",
+        "Provided reasonable guesses about dataset contents based on names",
+        "Response is clear and well-organized"
+      ]
+    }
+  },
+  "options": {
+    "timeout": 10000
+  }
+}

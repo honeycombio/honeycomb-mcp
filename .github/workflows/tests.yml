@@ -136,7 +136,7 @@ jobs:
         # Use Honeycomb API key for environment variable-based config
         HONEYCOMB_API_KEY: ${{ secrets.HONEYCOMB_API_KEY }}
         # Use only limited models for CI to save costs
-        EVAL_MODELS: '{"openai":"gpt-4o","anthropic":"claude-3-5-haiku-latest"}'
+        EVAL_MODELS: '{"openai":"gpt-4o-mini","anthropic":"claude-3-5-haiku-latest"}'
         EVAL_CONCURRENCY: 2
         EVAL_JUDGE_PROVIDER: "anthropic"
         EVAL_JUDGE_MODEL: "claude-3-5-haiku-latest"
