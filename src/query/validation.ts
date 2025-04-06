@@ -138,6 +138,20 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
           ]
         );
       }
+      
+      // Check if COUNT or CONCURRENCY incorrectly have a column specified
+      if (
+        ["COUNT", "CONCURRENCY"].includes(calc.op) &&
+        calc.column
+      ) {
+        throw new QueryError(
+          `Calculation ${calc.op} must NOT have a column.`,
+          [
+            `Remove the column attribute from the ${calc.op} operation`,
+            `The ${calc.op} operation counts all events, not values in a column`
+          ]
+        );
+      }
     });
   }
 
