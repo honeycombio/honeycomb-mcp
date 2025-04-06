@@ -180,6 +180,7 @@ For LLM-driven multi-step evaluations:
    ```
    pnpm run eval:openai    # Use OpenAI models
    pnpm run eval:anthropic # Use Anthropic models
+   pnpm run eval:gemini    # Use Google Gemini models
    ```
 
 5. Generate a report from an existing summary:
@@ -194,7 +195,8 @@ The framework can be configured using the following environment variables:
 ### LLM Provider Configuration
 - `OPENAI_API_KEY` - Your OpenAI API key
 - `ANTHROPIC_API_KEY` - Your Anthropic API key
-- `EVAL_MODELS` - JSON mapping of provider names to models, e.g. `{"openai":"gpt-4o","anthropic":"claude-3-sonnet"}`
+- `GEMINI_API_KEY` - Your Google Gemini API key
+- `EVAL_MODELS` - JSON mapping of provider names to models, e.g. `{"openai":"gpt-4o","anthropic":"claude-3-sonnet","gemini":"gemini-2.0-flash-001"}`
 - `EVAL_CONCURRENCY` - Number of concurrent evaluations to run (default: 2)
 - `EVAL_JUDGE_PROVIDER` - Provider to use for validation (default: "anthropic")
 - `EVAL_JUDGE_MODEL` - Model to use for validation (default: "claude-3-5-haiku-latest")

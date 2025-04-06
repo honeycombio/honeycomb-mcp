@@ -17,6 +17,8 @@ interface RunnerConfig {
     provider: string; // Provider name to use for validation
     model: string;    // Model to use for validation
   };
+  verbose?: boolean; // Enable detailed logging
+  testFile?: string; // Optional specific test file to run
 }
 
 export class EvalRunner {
@@ -24,9 +26,11 @@ export class EvalRunner {
   private results: EvalResult[] = [];
   private client: MCPClient | null = null;
   private serverProcess: ChildProcess | null = null;
+  private verbose: boolean;
 
   constructor(config: RunnerConfig) {
     this.config = config;
+    this.verbose = config.verbose || process.env.EVAL_VERBOSE === 'true' || false;
   }
 
   /**
@@ -38,7 +42,10 @@ export class EvalRunner {
     }
 
     if (this.config.serverCommandLine) {
-      console.log(`Starting MCP server with command: ${this.config.serverCommandLine}`);
+      console.log(`Starting MCP server...`);
+      if (this.verbose) {
+        console.log(`Using command: ${this.config.serverCommandLine}`);
+      }
       
       // Parse command and arguments - more carefully handling quoted arguments
       const commandLine = this.config.serverCommandLine;
@@ -73,7 +80,9 @@ export class EvalRunner {
       // The command is the first argument
       const command = args.shift() || '';
       
-      console.log(`Parsed command: ${command}, args:`, args);
+      if (this.verbose) {
+        console.log(`Parsed command: ${command}, args:`, args);
+      }
       
       // Create client
       this.client = new MCPClient({
@@ -103,12 +112,14 @@ export class EvalRunner {
       // Store the process reference for cleanup later
       // @ts-ignore - accessing private property, but we need it for cleanup
       this.serverProcess = transport._process;
-      console.log('Connected to MCP server via stdio');
+      console.log('Connected to MCP server');
       
       // List available tools for verification
       const toolsResult = await this.client.listTools();
-      console.log(`Available tools (${toolsResult.tools.length}):`, 
-        toolsResult.tools.map(t => t.name).join(', '));
+      if (this.verbose) {
+        console.log(`Available tools (${toolsResult.tools.length}):`, 
+          toolsResult.tools.map(t => t.name).join(', '));
+      }
     } 
     else if (this.config.serverUrl) {
       // For future: implement HTTP/SSE based connection
@@ -148,7 +159,29 @@ export class EvalRunner {
 
   async loadPrompts(): Promise<EvalPrompt[]> {
     const files = await fs.readdir(this.config.promptsDir);
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    
+    // If a specific test file is specified, only load that one
+    let jsonFiles: string[];
+    if (this.config.testFile) {
+      const testFileName = path.basename(this.config.testFile);
+      console.log(`Running single test file: ${testFileName}`);
+      
+      // Check if it exists
+      if (files.includes(testFileName)) {
+        jsonFiles = [testFileName];
+      } else {
+        // Try adding .json extension if not present
+        const fileWithExt = testFileName.endsWith('.json') ? testFileName : `${testFileName}.json`;
+        if (files.includes(fileWithExt)) {
+          jsonFiles = [fileWithExt];
+        } else {
+          console.error(`Test file not found: ${testFileName}`);
+          jsonFiles = [];
+        }
+      }
+    } else {
+      jsonFiles = files.filter(file => file.endsWith('.json'));
+    }
     
     const prompts: EvalPrompt[] = [];
     
@@ -176,46 +209,14 @@ export class EvalRunner {
     const startTime = Date.now();
     
     try {
-      let toolResponse: any = null;
-      let toolCalls: any[] = [];
-      
-      // Handle different evaluation modes
-      if (prompt.agentMode) {
-        // Agent mode: Enhanced goal-directed tool use with structured thinking
-        console.log(`Running in agent mode with goal: ${prompt.goal || prompt.prompt}`);
-        toolCalls = await this.runAgentMode(prompt, provider, modelName);
-      } else if (prompt.conversationMode) {
-        // Conversation mode: LLM-directed multiple tool calls
-        toolCalls = await this.runConversationMode(prompt, provider, modelName);
-      } else if (prompt.steps && prompt.steps.length > 0) {
-        // Multi-step mode: Pre-defined sequence of tool calls
-        toolCalls = await this.runMultiStepMode(prompt.steps);
-      } else if (prompt.tool && prompt.parameters) {
-        // Single tool mode: Legacy behavior
-        console.log(`Calling tool ${prompt.tool} with params`, prompt.parameters);
-        const callStartTime = Date.now();
-        toolResponse = await this.client.callTool({
-          name: prompt.tool,
-          arguments: prompt.parameters
-        });
-        const callEndTime = Date.now();
-        
-        // Still record the call for consistency
-        toolCalls = [{
-          tool: prompt.tool,
-          parameters: prompt.parameters,
-          response: toolResponse,
-          timestamp: new Date(callStartTime).toISOString(),
-          latencyMs: callEndTime - callStartTime
-        }];
-      } else {
-        throw new Error('Invalid prompt configuration: Must specify either tool, steps, enable conversationMode, or enable agentMode');
-      }
+      // Run as agent mode for all evaluations
+      console.log(`Running agent evaluation: ${prompt.prompt}`);
+      const toolCalls = await this.runAgentMode(prompt, provider, modelName);
       
       const endTime = Date.now();
       
       // Create validation prompt with all tool calls
-      const validationPrompt = this.createValidationPrompt(prompt, toolCalls, toolResponse);
+      const validationPrompt = this.createValidationPrompt(prompt, toolCalls);
       
       // Determine which provider/model to use for validation
       // If judge is configured, use that specific provider and model
@@ -247,43 +248,32 @@ export class EvalRunner {
       let score: number, passed: boolean, reasoning: string;
       let agentScores = { goalAchievement: 0, reasoningQuality: 0, pathEfficiency: 0 };
       
-      if (prompt.agentMode) {
-        // Parse agent-specific validation response
-        const goalMatch = validationResponse.match(/GOAL_ACHIEVEMENT:\s*([\d.]+)/);
-        const reasoningQualityMatch = validationResponse.match(/REASONING_QUALITY:\s*([\d.]+)/);
-        const pathEfficiencyMatch = validationResponse.match(/PATH_EFFICIENCY:\s*([\d.]+)/);
-        const overallScoreMatch = validationResponse.match(/OVERALL_SCORE:\s*([\d.]+)/);
-        const passedMatch = validationResponse.match(/PASSED:\s*(true|false)/i);
-        const reasoningMatch = validationResponse.match(/REASONING:\s*([\s\S]+)/);
-        
-        // Extract agent-specific scores
-        const goalAchievement = goalMatch && goalMatch[1] ? parseFloat(goalMatch[1]) : 0;
-        const reasoningQuality = reasoningQualityMatch && reasoningQualityMatch[1] ? parseFloat(reasoningQualityMatch[1]) : 0;
-        const pathEfficiency = pathEfficiencyMatch && pathEfficiencyMatch[1] ? parseFloat(pathEfficiencyMatch[1]) : 0;
-        
-        // Use overall score for the main score
-        score = overallScoreMatch && overallScoreMatch[1] ? parseFloat(overallScoreMatch[1]) : 
-               (goalAchievement + reasoningQuality + pathEfficiency) / 3; // Average if overall not provided
-        
-        passed = passedMatch && passedMatch[1] ? passedMatch[1].toLowerCase() === 'true' : false;
-        reasoning = reasoningMatch && reasoningMatch[1] ? reasoningMatch[1].trim() : validationResponse;
-        
-        // Store agent-specific scores
-        agentScores = {
-          goalAchievement,
-          reasoningQuality,
-          pathEfficiency
-        };
-      } else {
-        // Parse standard validation response
-        const scoreMatch = validationResponse.match(/SCORE:\s*([\d.]+)/);
-        const passedMatch = validationResponse.match(/PASSED:\s*(true|false)/i);
-        const reasoningMatch = validationResponse.match(/REASONING:\s*([\s\S]+)/);
-        
-        score = scoreMatch && scoreMatch[1] ? parseFloat(scoreMatch[1]) : 0;
-        passed = passedMatch && passedMatch[1] ? passedMatch[1].toLowerCase() === 'true' : false;
-        reasoning = reasoningMatch && reasoningMatch[1] ? reasoningMatch[1].trim() : validationResponse;
-      }
+      // Parse agent-specific validation response
+      const goalMatch = validationResponse.match(/GOAL_ACHIEVEMENT:\s*([\d.]+)/);
+      const reasoningQualityMatch = validationResponse.match(/REASONING_QUALITY:\s*([\d.]+)/);
+      const pathEfficiencyMatch = validationResponse.match(/PATH_EFFICIENCY:\s*([\d.]+)/);
+      const overallScoreMatch = validationResponse.match(/OVERALL_SCORE:\s*([\d.]+)/);
+      const passedMatch = validationResponse.match(/PASSED:\s*(true|false)/i);
+      const reasoningMatch = validationResponse.match(/REASONING:\s*([\s\S]+)/);
+      
+      // Extract agent-specific scores
+      const goalAchievement = goalMatch && goalMatch[1] ? parseFloat(goalMatch[1]) : 0;
+      const reasoningQuality = reasoningQualityMatch && reasoningQualityMatch[1] ? parseFloat(reasoningQualityMatch[1]) : 0;
+      const pathEfficiency = pathEfficiencyMatch && pathEfficiencyMatch[1] ? parseFloat(pathEfficiencyMatch[1]) : 0;
+      
+      // Use overall score for the main score
+      score = overallScoreMatch && overallScoreMatch[1] ? parseFloat(overallScoreMatch[1]) : 
+              (goalAchievement + reasoningQuality + pathEfficiency) / 3; // Average if overall not provided
+      
+      passed = passedMatch && passedMatch[1] ? passedMatch[1].toLowerCase() === 'true' : false;
+      reasoning = reasoningMatch && reasoningMatch[1] ? reasoningMatch[1].trim() : validationResponse;
+      
+      // Store agent-specific scores
+      agentScores = {
+        goalAchievement,
+        reasoningQuality,
+        pathEfficiency
+      };
       
       const tokenUsage = provider.getTokenUsage();
       
@@ -306,7 +296,6 @@ export class EvalRunner {
           latencyMs: endTime - startTime,
           tokenUsage,
           toolCallCount: toolCalls.length,
-          stepCount: (prompt.conversationMode || prompt.agentMode) ? toolCalls.length : undefined,
           // Include agent metrics if available
           ...(agentScores ? { 
             agentMetrics: {
@@ -321,11 +310,6 @@ export class EvalRunner {
         model: modelName
       };
       
-      // For backward compatibility
-      if (toolResponse !== null) {
-        result.toolResponse = toolResponse;
-      }
-      
       return result;
     } catch (error) {
       const endTime = Date.now();
@@ -334,7 +318,6 @@ export class EvalRunner {
         id: promptId,
         timestamp: new Date().toISOString(),
         prompt,
-        toolResponse: { error: error instanceof Error ? error.message : String(error) },
         toolCalls: [],
         validation: {
           passed: false,
@@ -357,15 +340,27 @@ export class EvalRunner {
   /**
    * Create a validation prompt for the LLM to evaluate
    */
-  private createValidationPrompt(prompt: EvalPrompt, toolCalls: any[], singleToolResponse: any = null): string {
-    let validationPrompt = '';
-    
-    // For agent mode with enhanced evaluation
-    if (prompt.agentMode) {
-      validationPrompt = `
+  private createValidationPrompt(prompt: EvalPrompt, toolCalls: any[]): string {
+    // Find the final summary if there is a completed step
+    let finalSummary = '';
+    const completedStep = toolCalls.find(call => call.complete);
+    if (completedStep && completedStep.summary) {
+      if (Array.isArray(completedStep.summary)) {
+        finalSummary = `FINAL SUMMARY:\n${completedStep.summary.map((item: {name: string, summary: string}) => 
+          `- ${item.name}: ${item.summary}`
+        ).join('\n')}`;
+      } else {
+        finalSummary = `FINAL SUMMARY:\n${completedStep.summary}`;
+      }
+    }
+
+    // Create a consistent validation prompt format for all evaluations
+    const validationPrompt = `
 You are evaluating an AI agent's performance on a data analysis task. The agent was given this goal:
 
-GOAL: ${prompt.goal || prompt.prompt}
+GOAL: ${prompt.prompt}
+
+${prompt.context ? `CONTEXT: ${prompt.context}\n\n` : ''}
 
 The agent took ${toolCalls.length} steps to complete the task. Here is the agent's process:
 
@@ -376,13 +371,18 @@ ${call.plan ? `PLAN: ${call.plan}` : ''}
 ${call.reasoning ? `REASONING: ${call.reasoning}` : ''}
 ${call.tool ? `TOOL: ${call.tool}` : ''}
 ${call.parameters ? `PARAMETERS: ${JSON.stringify(call.parameters, null, 2)}` : ''}
-${call.response ? `RESPONSE: ${JSON.stringify(call.response, null, 2)}` : ''}
-${call.summary ? `SUMMARY: ${call.summary}` : ''}
+${call.response ? `RESPONSE: ${
+  typeof call.response === 'string' 
+    ? call.response 
+    : JSON.stringify(call.response, null, 2)
+}` : ''}
 ${call.complete ? 'TASK COMPLETED' : ''}
 ${call.error ? `ERROR: ${call.error}` : ''}
 `).join('\n')}
 
-${prompt.validation.prompt}
+${finalSummary ? `\n${finalSummary}\n` : ''}
+
+VALIDATION CRITERIA: ${prompt.validation.prompt}
 
 Evaluate the agent on three dimensions:
 1. Goal Achievement (0-1): Did the agent accomplish the primary goal?
@@ -397,40 +397,6 @@ OVERALL_SCORE: [0-1 overall score]
 PASSED: [true/false]
 REASONING: [detailed explanation]
 `;
-    }
-    // For single-tool mode with backward compatibility
-    else if (singleToolResponse !== null && prompt.tool && prompt.parameters) {
-      validationPrompt = `
-Tool: ${prompt.tool}
-Parameters: ${JSON.stringify(prompt.parameters)}
-Response: ${JSON.stringify(singleToolResponse)}
-`;
-    } 
-    // For multi-step or conversation mode
-    else {
-      validationPrompt = `
-Evaluation of ${toolCalls.length} tool call${toolCalls.length !== 1 ? 's' : ''}:
-
-${toolCalls.map((call, index) => `
---- Tool Call ${index + 1} ---
-Tool: ${call.tool}
-Parameters: ${JSON.stringify(call.parameters)}
-Response: ${JSON.stringify(call.response)}
-`).join('\n')}
-`;
-    }
-    
-    // Standard validation instructions for non-agent modes
-    if (!prompt.agentMode) {
-      validationPrompt += `
-Validation instructions: ${prompt.validation.prompt}
-
-Score this response (0-1) and explain your reasoning. Format your response as:
-SCORE: [0-1 number]
-PASSED: [true/false]
-REASONING: [your detailed explanation]
-`;
-    }
     
     return validationPrompt;
   }
@@ -451,10 +417,16 @@ REASONING: [your detailed explanation]
       const step = steps[stepIndex];
       
       // Expand parameters using previous step results
-      console.log(`Step ${stepIndex}: Original parameters before expansion:`, JSON.stringify(step.parameters));
+      if (this.verbose) {
+        console.log(`Step ${stepIndex}: Original parameters before expansion:`, JSON.stringify(step.parameters));
+      }
       const expandedParameters = this.expandStepParameters(step.parameters, stepResults);
       
-      console.log(`Step ${stepIndex}: Calling tool ${step.tool} with expanded params:`, JSON.stringify(expandedParameters));
+      if (this.verbose) {
+        console.log(`Step ${stepIndex}: Calling tool ${step.tool} with expanded params:`, JSON.stringify(expandedParameters));
+      } else {
+        console.log(`Step ${stepIndex}: ${step.tool}`);
+      }
       const callStartTime = Date.now();
       
       try {
@@ -511,8 +483,10 @@ REASONING: [your detailed explanation]
           // Parse the path expression and extract the value
           const value = this.getValueByPath(stepResults[stepIndex], path);
           if (value === undefined || value === null) {
-            console.warn(`Warning: Path ${path} in step ${stepIndex} result returned null/undefined.`);
-            console.log(`Available properties at step ${stepIndex}:`, Object.keys(stepResults[stepIndex]).join(', '));
+            if (this.verbose) {
+              console.warn(`Warning: Path ${path} in step ${stepIndex} result returned null/undefined.`);
+              console.log(`Available properties at step ${stepIndex}:`, Object.keys(stepResults[stepIndex]).join(', '));
+            }
             
             // Use fallback value if provided, or try some sensible defaults based on context
             if (fallback) {
@@ -712,23 +686,108 @@ When you've completed the analysis, respond with:
         provider.setToolCallContext(true);
       }
       
-      // Ask LLM what tool to use
-      const llmResponse = await provider.runPrompt(conversationContext, modelName);
-      
-      // Extract JSON from response
-      const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (!jsonMatch) {
-        toolCalls.push({
-          error: "LLM response did not contain valid JSON",
-          response: llmResponse,
-          timestamp: new Date().toISOString(),
-          latencyMs: 0
-        });
-        break;
-      }
-      
       try {
-        const parsedResponse = JSON.parse(jsonMatch[1] || '{}');
+        // Ask LLM what tool to use
+        const llmResponse = await provider.runPrompt(conversationContext, modelName);
+        
+        // Improved JSON extraction and validation
+        let jsonContent = '';
+        let parsedResponse = null;
+        
+        // Try to find JSON objects directly - look for any JSON-like content
+        try {
+          // First try to parse directly if the response looks like a JSON object
+          if (llmResponse.trim().startsWith('{') && llmResponse.trim().endsWith('}')) {
+            jsonContent = llmResponse.trim();
+            parsedResponse = JSON.parse(jsonContent);
+          } 
+          // Next try to extract from code blocks with or without json annotation
+          else {
+            const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+              jsonContent = jsonMatch[1].trim();
+              parsedResponse = JSON.parse(jsonContent);
+            }
+          }
+        } catch (error) {
+          // If we get here, we found what looked like JSON but it couldn't be parsed
+          // Let's get detailed diagnostic info about where the parsing failed
+          const parseError = error as Error;
+          const errorMessage = parseError.message || 'Unknown error';
+          const errorLines = errorMessage.split('\n');
+          const positionMatch = errorLines[0]?.match(/at position (\d+)/);
+          const position = positionMatch && positionMatch[1] ? parseInt(positionMatch[1]) : -1;
+          
+          // Format error with context around the error position
+          let errorContext = '';
+          if (position >= 0 && jsonContent) {
+            const start = Math.max(0, position - 50);
+            const end = Math.min(jsonContent.length, position + 50);
+            const before = jsonContent.substring(start, position);
+            const after = jsonContent.substring(position, end);
+            errorContext = `\nError context:\n...${before}👉HERE👈${after}...\n`;
+            
+            // Add line number info
+            const lines = jsonContent.substring(0, position).split('\n');
+            const line = lines.length;
+            const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+            const column = lastLine ? lastLine.length + 1 : 0;
+            errorContext += `(Line ${line}, Column ${column})`;
+          }
+          
+          toolCalls.push({
+            error: `Error parsing conversation response: ${parseError.message || 'Unknown error'}${errorContext}`,
+            response: llmResponse,
+            timestamp: new Date().toISOString(),
+            latencyMs: 0
+          });
+          
+          // Update context with detailed error and guidance
+          conversationContext += `\n\n## Error in Step ${stepCount}:
+Error: ${parseError.message || 'Unknown error'}
+${errorContext}
+
+Please fix your JSON format. Common issues include:
+1. Missing or extra commas between properties
+2. Missing quotes around property names or string values
+3. Trailing commas at the end of objects or arrays
+4. Unescaped quotes or special characters in strings
+
+Try again with valid JSON formatting.
+`;
+          continue; // Skip to next iteration rather than breaking
+        }
+        
+        // If we couldn't find or parse any JSON
+        if (!parsedResponse) {
+          toolCalls.push({
+            error: "Invalid conversation response format - no valid JSON found",
+            response: llmResponse,
+            timestamp: new Date().toISOString(),
+            latencyMs: 0
+          });
+          
+          // Add guidance to the context
+          conversationContext += `\n\n## Error in Step ${stepCount}:
+Error: No valid JSON found in your response.
+
+Remember to format your response as JSON within triple backticks:
+\`\`\`json
+{
+  "tool": "tool_name",
+  "parameters": {
+    "environment": "${conversationEnvironment}",
+    "param2": "value2",
+    ...
+  },
+  "reasoning": "Brief explanation of why you're using this tool"
+}
+\`\`\`
+
+Try again with valid JSON formatting.
+`;
+          continue; // Skip to next iteration without breaking
+        }
         
         // Check if done
         if (parsedResponse.done) {
@@ -756,7 +815,11 @@ When you've completed the analysis, respond with:
           processedParameters = this.ensureValidQueryParameters(processedParameters);
         }
         
-        console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
+        if (this.verbose) {
+          console.log(`[Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
+        } else {
+          console.log(`[Step ${stepCount}] ${tool}`);
+        }
         
         const callStartTime = Date.now();
         let response;
@@ -793,7 +856,6 @@ What would you like to do next? Remember to:
 2. Include "${conversationEnvironment}" as the environment parameter
 3. Explain your reasoning for the next step
 `;
-        
       } catch (error) {
         // Handle errors in the conversation
         toolCalls.push({
@@ -907,8 +969,10 @@ ${exampleBlock}
     // Get available tools
     const toolsResult = await this.client.listTools();
     
-    // Extract environment from prompt or goal
-    const environment = prompt.prompt.match(/['"]([^'"]+?)['"] environment/)?.[1] || 'ms-demo';
+    // Extract environment from prompt or use the specified one
+    const environment = prompt.environment || 
+                       prompt.prompt.match(/['"]([^'"]+?)['"] environment/)?.[1] || 
+                       'ms-demo';
     
     // Build enhanced tool documentation with examples
     const toolDocs = this.buildEnhancedToolDocs(toolsResult.tools, environment);
@@ -922,7 +986,7 @@ ${exampleBlock}
 You are an AI agent performing data analysis on a Honeycomb environment. Your goal is to use the available tools to analyze data and reach specific insights.
 
 GOAL:
-${prompt.goal || prompt.prompt}
+${prompt.prompt}
 
 AVAILABLE TOOLS:
 ${toolDocs}
@@ -935,8 +999,8 @@ IMPORTANT CONTEXT:
 - Explain your thought process at each step
 `;
 
-    if (prompt.initialContext) {
-      agentContext += `\n\nADDITIONAL CONTEXT:\n${prompt.initialContext}\n`;
+    if (prompt.context) {
+      agentContext += `\n\nADDITIONAL CONTEXT:\n${prompt.context}\n`;
     }
 
     // Instructions for agent's structured thinking
@@ -965,10 +1029,22 @@ OR, if you've completed your analysis:
   "thought": "Analyze what you've learned from all previous steps",
   "plan": "Summarize how you've met the goal",
   "complete": true,
-  "summary": "Detailed summary of findings and insights",
+  "summary": [
+    {
+      "name": "item_name_1", 
+      "summary": "Detailed summary about this item"
+    },
+    {
+      "name": "item_name_2",
+      "summary": "Detailed summary about this item"
+    }
+    // Other items as needed
+  ],
   "reasoning": "Why the goal has been achieved"
 }
 \`\`\`
+
+Note: For the final summary, you can either provide a simple string or a structured array of items as shown above, whichever is more appropriate for the task.
 `;
 
     // Start agent loop
@@ -983,23 +1059,110 @@ OR, if you've completed your analysis:
         provider.setToolCallContext(true);
       }
       
-      // Get agent's next action
-      const llmResponse = await provider.runPrompt(agentContext, modelName);
-      
-      // Extract JSON from response
-      const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (!jsonMatch) {
-        toolCalls.push({
-          error: "Invalid agent response format - no JSON found",
-          response: llmResponse,
-          timestamp: new Date().toISOString(),
-          latencyMs: 0
-        });
-        break;
-      }
-      
       try {
-        const parsedResponse = JSON.parse(jsonMatch[1] || '{}');
+        // Get agent's next action
+        const llmResponse = await provider.runPrompt(agentContext, modelName);
+        
+        // Improved JSON extraction and validation
+        let jsonContent = '';
+        let parsedResponse = null;
+        
+        // Try to find JSON objects directly - look for any JSON-like content
+        try {
+          // First try to parse directly if the response looks like a JSON object
+          if (llmResponse.trim().startsWith('{') && llmResponse.trim().endsWith('}')) {
+            jsonContent = llmResponse.trim();
+            parsedResponse = JSON.parse(jsonContent);
+          } 
+          // Next try to extract from code blocks with or without json annotation
+          else {
+            const jsonMatch = llmResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+              jsonContent = jsonMatch[1].trim();
+              parsedResponse = JSON.parse(jsonContent);
+            }
+          }
+        } catch (error) {
+          // If we get here, we found what looked like JSON but it couldn't be parsed
+          // Let's get detailed diagnostic info about where the parsing failed
+          const parseError = error as Error;
+          const errorMessage = parseError.message || 'Unknown error';
+          const errorLines = errorMessage.split('\n');
+          const positionMatch = errorLines[0]?.match(/at position (\d+)/);
+          const position = positionMatch && positionMatch[1] ? parseInt(positionMatch[1]) : -1;
+          
+          // Format error with context around the error position
+          let errorContext = '';
+          if (position >= 0 && jsonContent) {
+            const start = Math.max(0, position - 50);
+            const end = Math.min(jsonContent.length, position + 50);
+            const before = jsonContent.substring(start, position);
+            const after = jsonContent.substring(position, end);
+            errorContext = `\nError context:\n...${before}👉HERE👈${after}...\n`;
+            
+            // Add line number info
+            const lines = jsonContent.substring(0, position).split('\n');
+            const line = lines.length;
+            const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+            const column = lastLine ? lastLine.length + 1 : 0;
+            errorContext += `(Line ${line}, Column ${column})`;
+          }
+          
+          toolCalls.push({
+            error: `Error parsing agent response: ${parseError.message || 'Unknown error'}${errorContext}`,
+            response: llmResponse,
+            timestamp: new Date().toISOString(),
+            latencyMs: 0
+          });
+          
+          // Add detailed guidance to the agent context to help fix the error
+          agentContext += `\n\n## Error in Step ${stepCount}:
+Error: ${parseError.message || 'Unknown error'}
+${errorContext}
+
+Please fix your JSON format. Common issues include:
+1. Missing or extra commas between properties
+2. Missing quotes around property names or string values
+3. Trailing commas at the end of objects or arrays
+4. Unescaped quotes or special characters in strings
+
+Try again with valid JSON formatting.
+`;
+          
+          continue; // Skip to next iteration rather than breaking
+        }
+        
+        // If we couldn't find or parse any JSON
+        if (!parsedResponse) {
+          toolCalls.push({
+            error: "Invalid agent response format - no valid JSON found",
+            response: llmResponse,
+            timestamp: new Date().toISOString(),
+            latencyMs: 0
+          });
+          
+          // Add guidance to the agent context
+          agentContext += `\n\n## Error in Step ${stepCount}:
+Error: No valid JSON found in your response.
+
+Remember to format your response as JSON within triple backticks:
+\`\`\`json
+{
+  "thought": "...",
+  "plan": "...",
+  "action": {
+    "tool": "tool_name",
+    "parameters": { ... }
+  },
+  "reasoning": "..."
+}
+\`\`\`
+
+Try again with valid JSON formatting.
+`;
+          
+          continue; // Skip to next iteration without breaking
+        }
         
         // Check if agent is done
         if (parsedResponse.complete) {
@@ -1031,7 +1194,11 @@ OR, if you've completed your analysis:
           processedParameters = this.ensureValidQueryParameters(processedParameters);
         }
         
-        console.log(`[Agent Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
+        if (this.verbose) {
+          console.log(`[Agent Step ${stepCount}] Calling tool ${tool} with params`, processedParameters);
+        } else {
+          console.log(`[Agent Step ${stepCount}] ${tool}`);
+        }
         
         // Execute tool call
         const callStartTime = Date.now();
@@ -1074,8 +1241,8 @@ Now analyze this information and determine your next step. Remember to:
 1. Build directly on what you've just learned
 2. Progress toward your overall goal
 3. Explain your thinking process clearly
+4. When you've completed your analysis, make sure to provide a structured summary
 `;
-        
       } catch (error) {
         // Handle JSON parsing or other errors
         toolCalls.push({
@@ -1239,10 +1406,22 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
       const prompts = await this.loadPrompts();
       const results: EvalResult[] = [];
       
+      // Track if we're actually going to run any evaluations
+      let hasProvidersWithModels = false;
+      
       // For each provider
       for (const provider of this.config.providers) {
         // Get models for this provider
-        const providerModels = this.config.selectedModels.get(provider.name) || [provider.models[0]];
+        const providerModels = this.config.selectedModels.get(provider.name);
+        
+        // Skip providers that don't have any models in the selectedModels map
+        if (!providerModels || providerModels.length === 0) {
+          console.log(`Skipping provider ${provider.name} as no models were selected for it`);
+          continue;
+        }
+        
+        // Mark that we have at least one provider with models
+        hasProvidersWithModels = true;
         
         // For each model for this provider
         for (const modelName of providerModels) {
@@ -1270,6 +1449,13 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
         }
       }
       
+      // Check if we had any providers with models
+      if (!hasProvidersWithModels) {
+        throw new Error(`No providers were found with models selected. Check your EVAL_MODELS configuration.
+Available providers: ${this.config.providers.map(p => p.name).join(', ')}
+Selected models: ${JSON.stringify(Object.fromEntries(this.config.selectedModels.entries()))}`);
+      }
+      
       // Save all results
       await this.saveResults(results);
       
@@ -1288,9 +1474,8 @@ Try again with valid JSON formatting and ensure you're using the correct tool na
       }, 0);
       const averageToolTokens = totalToolTokens / results.length;
       
-      // Calculate agent metrics if applicable
-      const agentResults = results.filter(r => r.prompt.agentMode);
-      const hasAgentMetrics = agentResults.length > 0;
+      // All results are from agent mode in our simplified approach
+      const hasAgentMetrics = true;
       
       // Build metadata
       const metadata: Record<string, any> = {
