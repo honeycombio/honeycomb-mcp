@@ -134,7 +134,9 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
           `Calculation ${calc.op} requires a column.`,
           [
             `Provide a column name for the ${calc.op} calculation`,
-            "Choose a column that is relevant for this aggregation operation"
+            "Choose a column that is relevant for this aggregation operation",
+            `INCORRECT: {"op": "${calc.op}"}`,
+            `CORRECT: {"op": "${calc.op}", "column": "duration_ms"}`
           ]
         );
       }
@@ -148,7 +150,9 @@ export function validateQuery(params: z.infer<typeof QueryToolSchema>): boolean 
           `Calculation ${calc.op} must NOT have a column.`,
           [
             `Remove the column attribute from the ${calc.op} operation`,
-            `The ${calc.op} operation counts all events, not values in a column`
+            `The ${calc.op} operation counts all events, not values in a column`,
+            `INCORRECT: {"op": "${calc.op}", "column": "${calc.column}"}`,
+            `CORRECT: {"op": "${calc.op}"}`
           ]
         );
       }

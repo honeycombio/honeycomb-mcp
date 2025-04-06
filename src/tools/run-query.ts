@@ -177,10 +177,10 @@ export function createRunQueryTool(api: HoneycombAPI) {
         if (params.calculations) {
           for (const calc of params.calculations) {
             if ((calc.op === "COUNT" || calc.op === "CONCURRENCY") && calc.column) {
-              throw new Error(`Error: ${calc.op} operation MUST NOT have a column specified. Remove the column attribute.`);
+              throw new Error(`Error: ${calc.op} operation MUST NOT have a column specified. Current: {"op": "${calc.op}", "column": "${calc.column}"}. Correct: {"op": "${calc.op}"}`);
             }
             if (!(calc.op === "COUNT" || calc.op === "CONCURRENCY") && !calc.column) {
-              throw new Error(`Error: ${calc.op} operation REQUIRES a column to be specified.`);
+              throw new Error(`Error: ${calc.op} operation REQUIRES a column to be specified. Current: {"op": "${calc.op}"}. Correct: {"op": "${calc.op}", "column": "some_column_name"}`);
             }
           }
         }
