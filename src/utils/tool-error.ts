@@ -18,10 +18,12 @@ export async function handleToolError(
 }> {
   let errorMessage = "Unknown error occurred";
   let suggestions: string[] = [];
+  let errorDetails: Record<string, any> = {};
 
   if (error instanceof HoneycombError) {
-    // Use the enhanced error message system
-    errorMessage = error.getFormattedMessage();
+    // Use the enhanced error message system with details
+    errorMessage = error.getFormattedMessage(true);
+    errorDetails = error.details;
   } else if (error instanceof z.ZodError) {
     // For Zod validation errors, create a validation error with context
     const validationError = HoneycombError.createValidationError(
@@ -31,9 +33,19 @@ export async function handleToolError(
         dataset: options.dataset
       }
     );
-    errorMessage = validationError.getFormattedMessage();
+    // Add the Zod errors as details
+    validationError.addDetails({
+      zodErrors: error.errors.map(err => ({
+        path: err.path.join('.'),
+        message: err.message,
+        code: err.code,
+      }))
+    });
+    errorMessage = validationError.getFormattedMessage(true);
+    errorDetails = validationError.details;
   } else if (error instanceof Error) {
     errorMessage = error.message;
+    errorDetails = { errorType: error.name, stack: error.stack };
   }
 
   // Log the error to stderr for debugging, unless suppressed

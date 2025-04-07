@@ -444,7 +444,7 @@ describe("HoneycombAPI", () => {
       }
     });
 
-    it("includes rate limit info in error messages", async () => {
+    it("captures rate limit info in error details", async () => {
       fetchMock.mockImplementationOnce(() => 
         Promise.resolve({
           ok: false,
@@ -457,11 +457,18 @@ describe("HoneycombAPI", () => {
         })
       );
 
-      await expect(api.runAnalysisQuery("prod", "dataset", {
-        environment: "prod",
-        dataset: "dataset",
-        calculations: [{ op: "COUNT" }]
-      })).rejects.toThrow(/Rate limit/);
+      try {
+        await api.runAnalysisQuery("prod", "dataset", {
+          environment: "prod",
+          dataset: "dataset",
+          calculations: [{ op: "COUNT" }]
+        });
+        expect(true).toBe(false); // This will fail the test if no error is thrown
+      } catch (error) {
+        expect(error).toBeInstanceOf(HoneycombError);
+        expect((error as HoneycombError).details).toHaveProperty('rateLimit');
+        expect((error as HoneycombError).details.rateLimit).toContain('limit=200');
+      }
     });
   });
 }); 

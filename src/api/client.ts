@@ -171,37 +171,120 @@ export class HoneycombAPI {
 
     if (response.status === 429) {
       let errorMessage = "Rate limit exceeded";
+      let details: Record<string, any> = {};
+      
       if (retryAfter) {
         errorMessage += `. Please try again after ${retryAfter}`;
+        details.retryAfter = retryAfter;
       }
       if (rateLimit) {
         errorMessage += `. ${rateLimit}`;
+        details.rateLimit = rateLimit;
       }
-      throw new HoneycombError(429, errorMessage);
+      if (rateLimitPolicy) {
+        details.rateLimitPolicy = rateLimitPolicy;
+      }
+      
+      throw new HoneycombError(429, errorMessage, [], details);
     }
 
     if (!response.ok) {
       // Try to get the error message from the response body
       let errorMessage = response.statusText;
+      let errorDetails: Record<string, any> = {
+        statusCode: response.status,
+        statusText: response.statusText,
+        url: url
+      };
+      
+      // Get content type to help determine parsing strategy
+      const contentType = response.headers.get('Content-Type') || '';
+      errorDetails.contentType = contentType;
+      
       try {
-        const errorBody = await response.json() as { error?: string } | string;
-        if (typeof errorBody === 'object' && errorBody.error) {
-          errorMessage = errorBody.error;
-        } else if (typeof errorBody === 'string') {
-          errorMessage = errorBody;
+        // Parse the response body based on content type
+        if (contentType.includes('application/problem+json')) {
+          // DetailedError format (RFC7807)
+          const body = await response.json() as Record<string, any>;
+          errorDetails.rawResponse = body;
+          
+          errorMessage = body.error || body.title || errorMessage;
+          errorDetails = {
+            ...errorDetails,
+            type: body.type,
+            title: body.title,
+            detail: body.detail
+          };
+        } else if (contentType.includes('application/vnd.api+json')) {
+          // JSONAPIError format
+          const body = await response.json() as Record<string, any>;
+          errorDetails.rawResponse = body;
+          
+          if (body.errors && Array.isArray(body.errors) && body.errors.length > 0) {
+            const firstError = body.errors[0] as Record<string, any>;
+            errorMessage = firstError.detail || firstError.title || 
+                          (firstError.code ? `Error code: ${firstError.code}` : errorMessage);
+            errorDetails = {
+              ...errorDetails,
+              errorId: firstError.id,
+              code: firstError.code,
+              title: firstError.title,
+              detail: firstError.detail,
+              allErrors: body.errors
+            };
+          }
+        } else {
+          // Simple Error format or other JSON (default)
+          const body = await response.json() as Record<string, any> | string;
+          errorDetails.rawResponse = body;
+          
+          if (typeof body === 'object' && body !== null) {
+            if ('error' in body && body.error) {
+              errorMessage = String(body.error);
+            } else if ('message' in body && body.message) {
+              errorMessage = String(body.message);
+            }
+            
+            // Capture any validation errors
+            if ('validation_errors' in body && body.validation_errors) {
+              errorDetails.validationErrors = body.validation_errors;
+            }
+          } else if (typeof body === 'string') {
+            errorMessage = body;
+          }
         }
       } catch (e) {
-        // If we can't parse the error body, just use the status text
+        // If JSON parsing fails, try to get text content
+        try {
+          const textContent = await response.clone().text();
+          if (textContent) {
+            errorMessage = textContent.length > 200 
+              ? textContent.substring(0, 200) + '...' 
+              : textContent;
+            errorDetails.textContent = textContent;
+          }
+        } catch (textError) {
+          // If all else fails, stay with statusText
+          errorDetails.parseError = e instanceof Error ? e.message : 'Unknown parsing error';
+        }
       }
 
-      // Include rate limit info in error message if available
+      // Include rate limit info
       if (rateLimit) {
-        errorMessage += ` (Rate limit: ${rateLimit})`;
+        errorDetails.rateLimit = rateLimit;
+      }
+      if (rateLimitPolicy) {
+        errorDetails.rateLimitPolicy = rateLimitPolicy;
+      }
+      if (retryAfter) {
+        errorDetails.retryAfter = retryAfter;
       }
 
       throw new HoneycombError(
         response.status,
         `Honeycomb API error: ${errorMessage}`,
+        [],
+        errorDetails
       );
     }
 
@@ -506,7 +589,16 @@ export class HoneycombAPI {
       
       // For non-Honeycomb errors, wrap in a QueryError with route info
       throw new QueryError(
-        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"} (API route: /1/queries/${datasetSlug})`
+        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"} (API route: /1/queries/${datasetSlug})`,
+        [],
+        {
+          errorType: error instanceof Error ? error.name : 'Unknown',
+          originalMessage: error instanceof Error ? error.message : 'Unknown error',
+          environment,
+          dataset: datasetSlug,
+          route: `/1/queries/${datasetSlug}`,
+          parameters: params
+        }
       );
     }
   }
