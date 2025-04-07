@@ -203,3 +203,35 @@ export const TimeValidationSchema = {
   message: "Invalid time parameters: either use time_range alone, or start_time and end_time together, or time_range with either start_time or end_time",
   path: ["time_range", "start_time", "end_time"]
 };
+
+/**
+ * Schema for dataset arguments base
+ */
+export const DatasetArgumentsBaseSchema = z.object({
+  environment: z.string().min(1).trim(),
+  dataset: z.union([
+    z.literal("__all__"),
+    z.string().min(1).trim()
+  ]),
+}).strict();
+
+/**
+ * Schema for dataset arguments with pagination
+ */
+export const DatasetArgumentsSchema = DatasetArgumentsBaseSchema.merge(PaginationSchema);
+
+/**
+ * Schema for dataset configuration
+ */
+export const DatasetConfigSchema = z.object({
+  name: z.string(),
+  apiKey: z.string(),
+  baseUrl: z.string().optional(),
+});
+
+/**
+ * Schema for configuration
+ */
+export const ConfigSchema = z.object({
+  datasets: z.array(DatasetConfigSchema),
+});

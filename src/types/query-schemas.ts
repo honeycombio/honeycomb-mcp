@@ -88,3 +88,20 @@ export const TraceDeepLinkSchema = z.object({
   message: "End timestamp must be greater than start timestamp",
   path: ["traceEndTs"]
 }).describe("Parameters for generating a direct deep link to a specific trace in the Honeycomb UI.");
+
+/**
+ * Schema for prompts
+ */
+export const PromptSchema = z.object({
+  name: z.string().describe("The name of the prompt"),
+  description: z.string().optional().describe("Optional description of the prompt"),
+  arguments: z
+    .array(
+      z.object({
+        name: z.string().describe("Argument name"),
+        description: z.string().optional().describe("Optional description of the argument"),
+        required: z.boolean().optional().describe("Whether the argument is required"),
+      }),
+    )
+    .optional().describe("Optional list of arguments for the prompt"),
+}).describe("Schema for prompt definitions");
