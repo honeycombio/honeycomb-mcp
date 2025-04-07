@@ -1,6 +1,6 @@
 import { HoneycombAPI } from "../api/client.js";
 import { CollectionOptions } from "../types/api.js";
-import { ListDatasetsSchema } from "../types/collection-schemas.js";
+import { ListDatasetsSchema } from "../types/resource-schemas.js";
 import { createTool } from "../utils/tool-factory.js";
 import { handleCollection } from "../utils/collection.js";
 

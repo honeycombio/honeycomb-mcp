@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { ListMarkersSchema } from "../types/collection-schemas.js";
+import { ListMarkersSchema } from "../types/resource-schemas.js";
 import { createTool } from "../utils/tool-factory.js";
 import { handleCollection } from "../utils/collection.js";
 

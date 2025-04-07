@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { ListRecipientsSchema } from "../types/collection-schemas.js";
+import { ListRecipientsSchema } from "../types/resource-schemas.js";
 import { createTool } from "../utils/tool-factory.js";
 import { handleCollection } from "../utils/collection.js";
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { ColumnAnalysisSchema } from "../types/collection-schemas.js";
+import { ColumnAnalysisSchema } from "../types/query-schemas.js";
 import { generateInterpretation, getCardinalityClassification } from "../utils/analysis.js";
 import { 
   NumericStatistics, 

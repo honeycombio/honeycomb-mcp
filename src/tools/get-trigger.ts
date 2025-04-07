@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
 import { handleToolError } from "../utils/tool-error.js";
-import { TriggerArgumentsSchema } from "../types/collection-schemas.js";
+import { TriggerArgumentsSchema } from "../types/resource-schemas.js";
 import { createTool } from "../utils/tool-factory.js";
 
 /**

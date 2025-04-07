@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
 import { handleToolError } from "../utils/tool-error.js";
-import { SLOArgumentsSchema } from "../types/collection-schemas.js";
+import { SLOArgumentsSchema } from "../types/resource-schemas.js";
 
 /**
  * Tool to get a specific service level objective (SLO) by ID. This tool returns a detailed object containing the SLO's ID, name, description, time period, target per million, compliance, budget remaining, SLI alias, and timestamps.

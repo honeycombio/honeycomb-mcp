@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { QueryToolSchema } from "../types/collection-schemas.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
 import { validateQuery } from "../query/validation.js";
 import { createTool } from "../utils/tool-factory.js";
 import { executeWithRetry, formatQueryResults } from "../utils/query-handler.js";

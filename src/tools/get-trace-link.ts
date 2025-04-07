@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
 import { handleToolError } from "../utils/tool-error.js";
-import { TraceDeepLinkSchema } from "../types/collection-schemas.js";
+import { TraceDeepLinkSchema } from "../types/query-schemas.js";
 import { createTool } from "../utils/tool-factory.js";
 
 /**
