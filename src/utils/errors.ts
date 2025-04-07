@@ -64,6 +64,8 @@ export class HoneycombError extends Error {
     if (includeDetails && Object.keys(this.details).length > 0) {
       output += "\n\nError details:";
       
+      // Handle specific error fields that get special formatting
+      
       // Handle validation errors specially
       if (this.details.validationErrors) {
         output += "\nValidation errors:";
@@ -92,6 +94,52 @@ export class HoneycombError extends Error {
       // Include request ID for support if available
       if (this.details.requestId) {
         output += `\nRequest ID: ${this.details.requestId}`;
+      }
+      
+      // Include context information if available
+      if (this.details.context) {
+        output += `\nContext: ${JSON.stringify(this.details.context, null, 2)}`;
+      }
+      
+      // Include any API response details
+      if (this.details.statusCode) {
+        output += `\nStatus code: ${this.details.statusCode}`;
+      }
+      
+      if (this.details.contentType) {
+        output += `\nContent type: ${this.details.contentType}`;
+      }
+      
+      // Include raw response for debugging, but truncate if too large
+      if (this.details.rawResponse) {
+        const responseStr = JSON.stringify(this.details.rawResponse);
+        const truncated = responseStr.length > 500 ? responseStr.substring(0, 500) + '...' : responseStr;
+        output += `\nAPI response: ${truncated}`;
+      }
+      
+      // Include rate limit info
+      if (this.details.rateLimit) {
+        output += `\nRate limit: ${this.details.rateLimit}`;
+      }
+      
+      // Loop through any other details not already handled
+      const handledKeys = ['validationErrors', 'code', 'title', 'detail', 
+                           'requestId', 'context', 'statusCode', 'contentType', 
+                           'rawResponse', 'rateLimit'];
+      
+      const otherDetails = Object.entries(this.details)
+        .filter(([key]) => !handledKeys.includes(key));
+      
+      if (otherDetails.length > 0) {
+        output += "\n\nAdditional details:";
+        otherDetails.forEach(([key, value]) => {
+          // For objects or arrays, use JSON stringify with indentation
+          if (typeof value === 'object' && value !== null) {
+            output += `\n${key}: ${JSON.stringify(value, null, 2)}`;
+          } else {
+            output += `\n${key}: ${value}`;
+          }
+        });
       }
     }
     
