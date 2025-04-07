@@ -215,6 +215,9 @@ Response clone will be parsed and logged below...`);
       const contentType = response.headers.get('Content-Type') || '';
       errorDetails.contentType = contentType;
       
+      // Create array to hold error suggestion messages
+      let validationSuggestions: string[] = [];
+      
       try {
         // Try to clone the response for parsing
         // In test environments, mocked responses may not support clone()
@@ -234,7 +237,7 @@ Response clone will be parsed and logged below...`);
         }
         
         // Now try to parse it as JSON
-        let body;
+        let body: Record<string, any> = {};
         try {
           if (rawText) {
             body = JSON.parse(rawText) as Record<string, any>;
@@ -247,9 +250,9 @@ Response clone will be parsed and logged below...`);
         
         // For tests, try to get the mocked JSON directly
         // In real code, we'd have parsed the rawText above
-        if (!body && 'json' in response && typeof response.json === 'function') {
+        if (Object.keys(body).length === 0 && 'json' in response && typeof response.json === 'function') {
           try {
-            body = await response.json();
+            body = await response.json() as Record<string, any>;
             console.error(`[DEBUG] Got JSON directly from response: ${JSON.stringify(body, null, 2)}`);
             // We need to explicitly restore this in tests since we can't clone
             // @ts-ignore - This is a hack for tests
@@ -259,58 +262,70 @@ Response clone will be parsed and logged below...`);
           }
         }
         
-        // Parse the response body based on content type
-        if (contentType.includes('application/problem+json')) {
-          // DetailedError format (RFC7807)
-          if (body) {
-            errorDetails.rawResponse = body;
+        // Parse the response body based on content type or status code
+        if (contentType.includes('application/problem+json') || response.status === 422) {
+          // DetailedError format (RFC7807) or Honeycomb validation error format
+          errorDetails.rawResponse = body;
+          
+          // Extract core error message
+          errorMessage = body.error || body.title || errorMessage;
+          
+          // Store all error details
+          errorDetails = {
+            ...errorDetails,
+            type: body.type || undefined,
+            title: body.title || undefined,
+            detail: body.detail || undefined,
+            instance: body.instance || undefined
+          };
+          
+          // Special handling for detailed validation errors (422)
+          if (body.type_detail && Array.isArray(body.type_detail) && body.type_detail.length > 0) {
+            errorDetails.validationErrors = body.type_detail;
             
-            errorMessage = body.error || body.title || errorMessage;
-            errorDetails = {
-              ...errorDetails,
-              type: body.type,
-              title: body.title,
-              detail: body.detail
-            };
+            // Add specific validation errors to suggestions
+            const validationInfo = body.type_detail.map((detail: any) => 
+              `Field '${detail.field || "unknown"}': ${detail.description || "invalid"} (code: ${detail.code || "unknown"})`
+            );
+            
+            if (validationInfo.length > 0) {
+              validationSuggestions.push(...validationInfo);
+            }
           }
         } else if (contentType.includes('application/vnd.api+json')) {
           // JSONAPIError format
-          if (body) {
-            errorDetails.rawResponse = body;
-            
-            if (body.errors && Array.isArray(body.errors) && body.errors.length > 0) {
-              const firstError = body.errors[0] as Record<string, any>;
-              errorMessage = firstError.detail || firstError.title || 
-                            (firstError.code ? `Error code: ${firstError.code}` : errorMessage);
-              errorDetails = {
-                ...errorDetails,
-                errorId: firstError.id,
-                code: firstError.code,
-                title: firstError.title,
-                detail: firstError.detail,
-                allErrors: body.errors
-              };
-            }
+          errorDetails.rawResponse = body;
+          
+          if (body.errors && Array.isArray(body.errors) && body.errors.length > 0) {
+            const firstError = body.errors[0] as Record<string, any>;
+            errorMessage = firstError.detail || firstError.title || 
+                          (firstError.code ? `Error code: ${firstError.code}` : errorMessage);
+            errorDetails = {
+              ...errorDetails,
+              errorId: firstError.id || undefined,
+              code: firstError.code || undefined,
+              title: firstError.title || undefined,
+              detail: firstError.detail || undefined,
+              allErrors: body.errors
+            };
           }
         } else {
           // Simple Error format or other JSON (default)
-          if (body) {
-            errorDetails.rawResponse = body;
-            
-            if (typeof body === 'object' && body !== null) {
-              if ('error' in body && body.error) {
-                errorMessage = String(body.error);
-              } else if ('message' in body && body.message) {
-                errorMessage = String(body.message);
-              }
-              
-              // Capture any validation errors
-              if ('validation_errors' in body && body.validation_errors) {
-                errorDetails.validationErrors = body.validation_errors;
-              }
-            } else if (typeof body === 'string') {
-              errorMessage = body;
+          errorDetails.rawResponse = body;
+          
+          if (typeof body === 'object' && body !== null) {
+            if ('error' in body && body.error) {
+              errorMessage = String(body.error);
+            } else if ('message' in body && body.message) {
+              errorMessage = String(body.message);
             }
+            
+            // Capture any validation errors
+            if ('validation_errors' in body && body.validation_errors) {
+              errorDetails.validationErrors = body.validation_errors;
+            }
+          } else if (typeof body === 'string') {
+            errorMessage = body;
           } else {
             // If we couldn't parse as JSON, use the raw text as the error message
             errorMessage = rawText || errorMessage;
@@ -352,8 +367,8 @@ Response clone will be parsed and logged below...`);
         errorDetails.retryAfter = retryAfter;
       }
 
-      // Build suggestions based on status code and other context
-      const suggestions: string[] = [];
+      // Build error suggestions based on response status
+      const suggestions: string[] = [...validationSuggestions];
       
       if (response.status === 401) {
         suggestions.push(`Your API key for environment "${environment}" is invalid or expired.`);
@@ -686,6 +701,15 @@ Response clone will be parsed and logged below...`);
       if (error instanceof HoneycombError) {
         // For validation errors, enhance with context
         if (error.statusCode === 422) {
+          // For validation errors, check if we have detailed validation info
+          const errorDetails: Record<string, any> = {};
+          
+          // If error contains the Honeycomb validation format, extract it
+          if (error.details && error.details.validationErrors) {
+            errorDetails.validationErrors = error.details.validationErrors;
+          }
+          
+          // Create detailed validation error with context and validation details
           throw HoneycombError.createValidationError(
             error.message,
             {
@@ -694,7 +718,8 @@ Response clone will be parsed and logged below...`);
               granularity: params.granularity,
               api_route: `/1/queries/${datasetSlug}`
             },
-            this
+            this,
+            errorDetails
           );
         }
         // For other HoneycombErrors, just rethrow them with route info

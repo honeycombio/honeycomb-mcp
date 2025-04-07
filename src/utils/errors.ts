@@ -25,7 +25,8 @@ export class HoneycombError extends Error {
   static createValidationError(
     message: string,
     context: ValidationErrorContext,
-    api?: any
+    api?: any,
+    extraDetails: Record<string, any> = {}
   ): HoneycombError {
     // Format the context as a string for display
     const contextStr = Object.entries(context)
@@ -103,7 +104,8 @@ export class HoneycombError extends Error {
       suggestions,
       { 
         context,
-        verificationSteps
+        verificationSteps,
+        ...extraDetails
       }
     );
   }
@@ -138,11 +140,29 @@ export class HoneycombError extends Error {
       // Handle validation errors specially
       if (this.details.validationErrors) {
         output += "\nValidation errors:";
-        if (Array.isArray(this.details.validationErrors)) {
+        
+        // Handle Honeycomb's RFC7807 format with type_detail
+        if (Array.isArray(this.details.validationErrors) && 
+            this.details.validationErrors.length > 0 &&
+            'field' in this.details.validationErrors[0]) {
+          
+          // Format specialized for Honeycomb type_detail format
+          this.details.validationErrors.forEach((err: any, i: number) => {
+            if (err.field && err.code) {
+              output += `\n  ${i+1}. Field '${err.field}': ${err.description || 'Invalid'} (code: ${err.code})`;
+            } else {
+              output += `\n  ${i+1}. ${JSON.stringify(err)}`;
+            }
+          });
+        } 
+        // Handle generic array of validation errors
+        else if (Array.isArray(this.details.validationErrors)) {
           this.details.validationErrors.forEach((err: any, i: number) => {
             output += `\n  ${i+1}. ${typeof err === 'string' ? err : JSON.stringify(err)}`;
           });
-        } else {
+        } 
+        // Handle object or other formats
+        else {
           output += `\n  ${JSON.stringify(this.details.validationErrors)}`;
         }
       }
