@@ -65,7 +65,9 @@ export function createTool<TParams>(
         return await options.handler(params, api);
       } catch (error) {
         // Use optional error context if provided
-        const context = options.errorContext ? options.errorContext(params) : undefined;
+        const context = options.errorContext ? 
+          { ...options.errorContext(params), api } : 
+          { api };
         return handleToolError(error, options.name, context);
       }
     }

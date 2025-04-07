@@ -11,6 +11,7 @@ export async function handleToolError(
     suppressConsole?: boolean;
     environment?: string;
     dataset?: string;
+    api?: any;
   } = {}
 ): Promise<{
   content: { type: "text"; text: string }[];
@@ -34,7 +35,8 @@ export async function handleToolError(
       {
         environment: options.environment,
         dataset: options.dataset
-      }
+      },
+      options.api
     );
     // Add the Zod errors as details
     validationError.addDetails({

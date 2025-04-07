@@ -185,7 +185,13 @@ export class HoneycombAPI {
         details.rateLimitPolicy = rateLimitPolicy;
       }
       
-      throw new HoneycombError(429, errorMessage, [], details);
+      // For rate limit errors, provide specific guidance on what to do
+      const suggestions = [
+        `Your request was rate limited. Please try again after ${retryAfter || 'the specified time'}.`,
+        `Consider reducing the frequency of your requests.`
+      ];
+      
+      throw new HoneycombError(429, errorMessage, suggestions, details);
     }
 
     if (!response.ok) {
@@ -280,10 +286,52 @@ export class HoneycombAPI {
         errorDetails.retryAfter = retryAfter;
       }
 
+      // Build suggestions based on status code and other context
+      const suggestions: string[] = [];
+      
+      if (response.status === 401) {
+        suggestions.push(`Your API key for environment "${environment}" is invalid or expired.`);
+        suggestions.push(`Check the API key configuration via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY.`);
+      } else if (response.status === 403) {
+        suggestions.push(`Your API key for environment "${environment}" doesn't have permission to perform this operation.`);
+        const availablePermissions = this.environments.get(environment)?.permissions;
+        if (availablePermissions) {
+          const permissionsList = Object.entries(availablePermissions)
+            .filter(([_, value]) => value === true)
+            .map(([key]) => key)
+            .join(", ");
+          suggestions.push(`Current permissions: ${permissionsList || "none"}`);
+        }
+      } else if (response.status === 404) {
+        if (path.includes('/datasets/')) {
+          const pathParts = path.split('/datasets/');
+          if (pathParts.length > 1 && pathParts[1]) {
+            const datasetPath = pathParts[1];
+            const datasetSlug = datasetPath.split('/')[0] || 'unknown';
+            suggestions.push(`The dataset "${datasetSlug}" was not found in environment "${environment}".`);
+            suggestions.push(`Check that the dataset name is correct and that it exists in this environment.`);
+          } else {
+            suggestions.push(`The dataset was not found in environment "${environment}".`);
+            suggestions.push(`Check that the dataset name is correct and that it exists in this environment.`);
+          }
+        } else {
+          suggestions.push(`The requested resource was not found.`);
+          suggestions.push(`Check that all IDs and resource names in your request are correct.`);
+        }
+      } else if (response.status === 422) {
+        suggestions.push(`Your request contains invalid parameters.`);
+        if (errorDetails.validationErrors) {
+          suggestions.push(`Review the validation errors in the details section.`);
+        }
+      } else if (response.status >= 500) {
+        suggestions.push(`There was a server-side issue with the Honeycomb API.`);
+        suggestions.push(`This is likely a temporary issue. Please try again later.`);
+      }
+      
       throw new HoneycombError(
         response.status,
         `Honeycomb API error: ${errorMessage}`,
-        [],
+        suggestions,
         errorDetails
       );
     }
@@ -579,7 +627,8 @@ export class HoneycombAPI {
               dataset: datasetSlug,
               granularity: params.granularity,
               api_route: `/1/queries/${datasetSlug}`
-            }
+            },
+            this
           );
         }
         // For other HoneycombErrors, just rethrow them with route info

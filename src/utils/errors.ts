@@ -24,18 +24,87 @@ export class HoneycombError extends Error {
    */
   static createValidationError(
     message: string,
-    context: ValidationErrorContext
+    context: ValidationErrorContext,
+    api?: any
   ): HoneycombError {
+    // Format the context as a string for display
     const contextStr = Object.entries(context)
       .filter(([_, value]) => value !== undefined)
       .map(([key, value]) => `${key}="${value}"`)
       .join(", ");
-
+    
+    // Start building suggestions based on the error and context
+    const suggestions: string[] = [];
+    
+    // Add context information as first suggestion
+    if (contextStr) {
+      suggestions.push(contextStr);
+    }
+    
+    // Create detailed verification steps based on the error type and context
+    let verificationSteps: string[] = [];
+    
+    // If we have access to the API client, we can provide more specific help
+    if (api && typeof api.getEnvironments === 'function') {
+      const environments = api.getEnvironments();
+      
+      // Environment-related suggestions
+      if (context.environment) {
+        if (!environments.includes(context.environment)) {
+          // Environment doesn't exist
+          verificationSteps.push(`The environment "${context.environment}" was not found. Available environments: ${environments.join(", ")}`);
+        } else {
+          // Environment exists, so API key is valid - issue is likely with dataset or query
+          if (context.dataset) {
+            verificationSteps.push(`Verify the dataset "${context.dataset}" exists in environment "${context.environment}" and you have access to it`);
+          }
+          verificationSteps.push("Check your query parameters for syntax or logical errors");
+        }
+      } else {
+        // No environment specified
+        verificationSteps.push(`Specify a valid environment. Available environments: ${environments.join(", ")}`);
+      }
+    } else {
+      // Without API client, give more generic suggestions
+      if (context.environment) {
+        verificationSteps.push(`Verify the environment "${context.environment}" is correctly configured`);
+      } else {
+        verificationSteps.push("Specify a valid environment name");
+      }
+      
+      if (context.dataset) {
+        verificationSteps.push(`Verify the dataset "${context.dataset}" exists and you have access to it`);
+      }
+      
+      // Always suggest checking query parameters
+      verificationSteps.push("Check that your query parameters follow the required format and constraints");
+    }
+    
+    // Add specific advice based on the error message
+    if (message.includes("time_range") || message.includes("start_time") || message.includes("end_time")) {
+      verificationSteps.push("Check your time range parameters - either use time_range OR start_time and end_time together");
+    }
+    
+    if (message.includes("calculations") || message.includes("calculation")) {
+      verificationSteps.push("For COUNT operations, DO NOT include a column field");
+      verificationSteps.push("For all other operations, a column field is REQUIRED");
+    }
+    
+    // Build the final error message
+    const baseMessage = `Query validation failed: ${message}`;
+    const suggestionsText = suggestions.length > 0 ? 
+      `\n\nSuggested next steps:\n${suggestions.map(s => `- ${s}`).join("\n")}` : "";
+    const verificationText = verificationSteps.length > 0 ? 
+      `\n\nPlease verify:\n${verificationSteps.map(s => `- ${s}`).join("\n")}` : "";
+    
     return new HoneycombError(
       422,
-      `Query validation failed: ${message}\n\nSuggested next steps:\n- ${contextStr}\n\nPlease verify:\n- The environment name is correct and configured via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY\n- Your API key is valid\n- The dataset exists and you have access to it\n- Your query parameters are valid`,
-      [],
-      { context }
+      `${baseMessage}${suggestionsText}${verificationText}`,
+      suggestions,
+      { 
+        context,
+        verificationSteps
+      }
     );
   }
 
