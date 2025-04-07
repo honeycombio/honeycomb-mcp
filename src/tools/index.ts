@@ -83,15 +83,26 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
             ],
           } as any;
         } catch (error) {
-          // Format errors to match the SDK's expected format (though most errors should now be handled by the tool itself)
+          // Most errors should be handled by the tool itself through handleToolError,
+          // but if one gets through, use a consistent format that matches our enhanced error handling
+          
+          // Get more useful error details when possible
+          const errorDetails = error instanceof Error ? {
+            name: error.name,
+            stack: error.stack
+          } : {};
+          
           return {
             content: [
               {
                 type: "text",
-                text: error instanceof Error ? error.message : String(error),
+                text: `Unexpected error in tool execution: ${error instanceof Error ? error.message : String(error)}`,
               },
             ],
-            isError: true,
+            error: {
+              message: error instanceof Error ? error.message : String(error),
+              details: errorDetails
+            }
           } as any;
         }
       }

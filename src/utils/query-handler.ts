@@ -54,17 +54,32 @@ export function formatQueryResults(
     // Handle result processing errors separately to still return partial results
     console.error("Error processing query results:", processingError);
     
+    // Use a consistent format that matches our enhanced error handling
+    const errorDetails = processingError instanceof Error ? {
+      name: processingError.name,
+      stack: processingError.stack
+    } : {};
+    
+    // Return partial results along with error information
+    const partialResults = {
+      results: result.data?.results || [],
+      query_url: result.links?.query_url || null
+    };
+    
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({
-            results: result.data?.results || [],
-            query_url: result.links?.query_url || null,
-            error: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`
-          }, null, 2),
+          text: JSON.stringify(partialResults, null, 2),
         },
       ],
+      error: {
+        message: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`,
+        details: {
+          ...errorDetails,
+          partialResults: true
+        }
+      }
     };
   }
 }
