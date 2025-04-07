@@ -117,15 +117,18 @@ describe("createTraceDeepLinkTool", () => {
     
     // Extract the handler function from the createTool call
     const tool = createTraceDeepLinkTool(mockApi as any);
-    const options = createToolSpy.mock.calls[0][1];
-    const handlerFn = options.handler;
+    const createToolCallOptions = createToolSpy.mock.calls[0]?.[1];
+    if (!createToolCallOptions) {
+      throw new Error('createTool was not called with expected arguments');
+    }
+    const handlerFn = createToolCallOptions.handler;
     
     // Test with missing environment
     await expect(async () => {
       await handlerFn({
         dataset: "test-dataset",
         traceId: "abc123",
-      }, mockApi);
+      }, mockApi as any);
     }).rejects.toThrow("Missing required parameter: environment");
 
     // Test with missing traceId
@@ -133,7 +136,7 @@ describe("createTraceDeepLinkTool", () => {
       await handlerFn({
         environment: "test-env",
         dataset: "test-dataset",
-      }, mockApi);
+      }, mockApi as any);
     }).rejects.toThrow("Missing required parameter: traceId");
   });
 });

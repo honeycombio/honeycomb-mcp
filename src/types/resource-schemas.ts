@@ -72,6 +72,10 @@ export const ListColumnsSchema = z.object({
   sort_by: z.string().optional().describe("Field to sort by"),
   sort_order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
   search: z.string().trim().optional().describe("Search term to filter column names"),
+  search_fields: z.union([
+    z.string(),
+    z.array(z.string().min(1))
+  ]).optional().describe("Fields to search in (string or array of strings)"),
 })).describe("Parameters for listing columns in a Honeycomb dataset. Returns column names, types, and additional metadata.");
 
 /**
@@ -98,6 +102,11 @@ export const ListSLOsSchema = z.object({
   limit: z.number().positive().int().optional().describe("Number of items per page"),
   sort_by: z.string().optional().describe("Field to sort by"),
   sort_order: z.enum(['asc', 'desc']).optional().describe("Sort direction"),
+  search: z.string().trim().optional().describe("Search term to filter SLO names"),
+  search_fields: z.union([
+    z.string(),
+    z.array(z.string().min(1))
+  ]).optional().describe("Fields to search in (string or array of strings)"),
 })).describe("Parameters for listing Service Level Objectives in a Honeycomb dataset. Returns SLO details including targets and time periods.");
 
 /**

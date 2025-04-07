@@ -6,7 +6,7 @@ describe('analyze-columns tool', () => {
   // Create more complete mock API to match our refactored structure
   const mockApi = {
     getVisibleColumns: vi.fn(),
-    analyzeColumn: vi.fn(),
+    analyzeColumns: vi.fn(),
   };
 
   // Reset mocks before each test
@@ -37,32 +37,45 @@ describe('analyze-columns tool', () => {
       { key_name: 'test-column2', type: 'string', hidden: false }
     ]);
 
-    // Mock the column analysis response for each column
-    mockApi.analyzeColumn.mockImplementation((env, dataset, column) => {
+    // Mock the column analysis response 
+    mockApi.analyzeColumns.mockImplementation((env, dataset, params) => {
+      const column = params.columns[0];
       if (column === 'test-column1') {
         return Promise.resolve({
-          sample_count: 10,
-          unique_count: 2,
-          top_values: [
-            { value: 'value1', count: 10 },
-            { value: 'value2', count: 5 }
-          ],
-          min: 5,
-          max: 30,
-          avg: 15.5,
-          p50: 15,
-          p90: 18,
-          p95: 20,
-          p99: 28
+          data: {
+            results: [
+              { 
+                'test-column1': 'value1',
+                COUNT: 10,
+                'AVG(test-column1)': 15.5,
+                'P50(test-column1)': 15,
+                'P90(test-column1)': 18,
+                'P95(test-column1)': 20,
+                'P99(test-column1)': 28,
+                'MAX(test-column1)': 30,
+                'MIN(test-column1)': 5
+              },
+              { 
+                'test-column1': 'value2',
+                COUNT: 5
+              }
+            ]
+          }
         });
       } else {
         return Promise.resolve({
-          sample_count: 15,
-          unique_count: 2,
-          top_values: [
-            { value: 'valueA', count: 10 },
-            { value: 'valueB', count: 5 }
-          ]
+          data: {
+            results: [
+              { 
+                'test-column2': 'valueA',
+                COUNT: 10,
+              },
+              { 
+                'test-column2': 'valueB',
+                COUNT: 5
+              }
+            ]
+          }
         });
       }
     });
@@ -76,14 +89,7 @@ describe('analyze-columns tool', () => {
       testParams.dataset
     );
     
-    expect(mockApi.analyzeColumn).toHaveBeenCalledTimes(2);
-    
-    expect(mockApi.analyzeColumn).toHaveBeenCalledWith(
-      testParams.environment,
-      testParams.dataset,
-      'test-column1',
-      undefined
-    );
+    expect(mockApi.analyzeColumns).toHaveBeenCalledTimes(2);
 
     // Check response structure
     expect(result).toHaveProperty('content');
@@ -120,9 +126,10 @@ describe('analyze-columns tool', () => {
     ]);
     
     // Mock empty column analysis
-    mockApi.analyzeColumn.mockResolvedValue({
-      sample_count: 0,
-      unique_count: 0
+    mockApi.analyzeColumns.mockResolvedValue({
+      data: {
+        results: []
+      }
     });
 
     const tool = createAnalyzeColumnsTool(mockApi as any);

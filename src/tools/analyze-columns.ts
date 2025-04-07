@@ -58,8 +58,55 @@ export function createAnalyzeColumnsTool(api: HoneycombAPI) {
       // Use Promise.all to run all column analyses in parallel
       await Promise.all(columns.map(async (column) => {
         try {
+          // We need to create a simplified analyzeColumn method from the available API methods
           const columnResult = await executeWithRetry(async () => {
-            return await api.analyzeColumn(environment, dataset, column, timeRange);
+            // Use the full analyzeColumns method but only for a single column
+            const result = await api.analyzeColumns(environment, dataset, {
+              environment,
+              dataset,
+              columns: [column],
+              timeRange
+            });
+            
+            // Extract statistics from the results
+            const stats: any = {
+              sample_count: 0,
+              unique_count: 0
+            };
+            
+            if (result.data?.results && result.data.results.length > 0) {
+              const row = result.data.results[0];
+              
+              if (row) {
+                // Get the COUNT value
+                const count = row.COUNT || 0;
+                stats.sample_count = count;
+                
+                // Extract AVG, MIN, MAX, etc. calculations if they exist
+                if (row[`AVG(${column})`] !== undefined) stats.avg = row[`AVG(${column})`];
+                if (row[`MIN(${column})`] !== undefined) stats.min = row[`MIN(${column})`];
+                if (row[`MAX(${column})`] !== undefined) stats.max = row[`MAX(${column})`];
+                if (row[`P50(${column})`] !== undefined) stats.p50 = row[`P50(${column})`];
+                if (row[`P90(${column})`] !== undefined) stats.p90 = row[`P90(${column})`];
+                if (row[`P95(${column})`] !== undefined) stats.p95 = row[`P95(${column})`];
+                if (row[`P99(${column})`] !== undefined) stats.p99 = row[`P99(${column})`];
+              }
+              
+              // Count unique values
+              const uniqueValues = new Set();
+              result.data.results.forEach(r => {
+                if (r[column] !== undefined) uniqueValues.add(r[column]);
+              });
+              stats.unique_count = uniqueValues.size;
+              
+              // Create top values
+              stats.top_values = result.data.results.slice(0, 10).map(r => ({
+                value: r[column],
+                count: r.COUNT || 0
+              }));
+            }
+            
+            return stats;
           });
           
           const columnInfo = availableColumns.find(c => c.key_name === column)!;
@@ -107,6 +154,9 @@ export function createAnalyzeColumnsTool(api: HoneycombAPI) {
           results[column] = {
             name: column,
             type: availableColumns.find(c => c.key_name === column)?.type || 'unknown',
+            sample_count: 0,
+            unique_count: 0,
+            cardinality: 'low',
             error: columnError instanceof Error ? columnError.message : String(columnError)
           };
         }
