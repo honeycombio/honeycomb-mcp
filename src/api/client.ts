@@ -195,14 +195,6 @@ export class HoneycombAPI {
     }
 
     if (!response.ok) {
-      // TEMPORARY DEBUG CODE - REMOVE BEFORE FINAL PR
-      // This code logs raw API responses to help diagnose format issues
-      console.error(`[DEBUG] Honeycomb API Error Response:
-Status: ${response.status} ${response.statusText}
-URL: ${url}
-Headers: ${JSON.stringify(Object.fromEntries([...response.headers.entries()]), null, 2)}
-Response clone will be parsed and logged below...`);
-      
       // Try to get the error message from the response body
       let errorMessage = response.statusText;
       let errorDetails: Record<string, any> = {
@@ -219,48 +211,8 @@ Response clone will be parsed and logged below...`);
       let validationSuggestions: string[] = [];
       
       try {
-        // Try to clone the response for parsing
-        // In test environments, mocked responses may not support clone()
-        let responseClone;
-        let rawText = '';
-        try {
-          if (typeof response.clone === 'function') {
-            responseClone = response.clone();
-            // Try to get the raw text first for logging
-            rawText = await responseClone.text();
-            console.error(`[DEBUG] Raw Response Body: ${rawText}`);
-          } else {
-            console.error(`[DEBUG] Response doesn't support clone() - likely a test mock`);
-          }
-        } catch (cloneError) {
-          console.error(`[DEBUG] Failed to clone response: ${cloneError}`);
-        }
-        
-        // Now try to parse it as JSON
-        let body: Record<string, any> = {};
-        try {
-          if (rawText) {
-            body = JSON.parse(rawText) as Record<string, any>;
-            console.error(`[DEBUG] Parsed JSON Body: ${JSON.stringify(body, null, 2)}`);
-          }
-        } catch (e) {
-          console.error(`[DEBUG] Failed to parse response as JSON: ${e}`);
-          // Not JSON, use the raw text later
-        }
-        
-        // For tests, try to get the mocked JSON directly
-        // In real code, we'd have parsed the rawText above
-        if (Object.keys(body).length === 0 && 'json' in response && typeof response.json === 'function') {
-          try {
-            body = await response.json() as Record<string, any>;
-            console.error(`[DEBUG] Got JSON directly from response: ${JSON.stringify(body, null, 2)}`);
-            // We need to explicitly restore this in tests since we can't clone
-            // @ts-ignore - This is a hack for tests
-            response.json = () => Promise.resolve(body);
-          } catch (jsonError) {
-            console.error(`[DEBUG] Failed to get JSON from response: ${jsonError}`);
-          }
-        }
+        // Parse response body
+        const body = await response.json() as Record<string, any>;
         
         // Parse the response body based on content type or status code
         if (contentType.includes('application/problem+json') || response.status === 422) {
@@ -331,32 +283,21 @@ Response clone will be parsed and logged below...`);
             }
           } else if (typeof body === 'string') {
             errorMessage = body;
-          } else {
-            // If we couldn't parse as JSON, use the raw text as the error message
-            errorMessage = rawText || errorMessage;
           }
+          // Use statusText if we cannot determine a better error message
         }
       } catch (e) {
-        // If we get here, there was a serious error with our parsing attempt
-        console.error(`[DEBUG] Error in response parsing: ${e instanceof Error ? e.stack : String(e)}`);
-        
-        // Attempt one more time to get raw text content, but only if clone is supported
+        // If we can't parse JSON, try to get text content
         try {
-          if (typeof response.clone === 'function') {
-            const textContent = await response.clone().text();
-            console.error(`[DEBUG] Fallback text content: ${textContent}`);
-            if (textContent) {
-              errorMessage = textContent.length > 200 
-                ? textContent.substring(0, 200) + '...' 
-                : textContent;
-              errorDetails.textContent = textContent;
-            }
-          } else {
-            console.error(`[DEBUG] Skipping fallback text extraction, response.clone not supported`);
+          const textContent = await response.clone().text();
+          if (textContent) {
+            errorMessage = textContent.length > 200 
+              ? textContent.substring(0, 200) + '...' 
+              : textContent;
+            errorDetails.textContent = textContent;
           }
         } catch (textError) {
           // If all else fails, stay with statusText
-          console.error(`[DEBUG] Failed to get text content too: ${textError}`);
           errorDetails.parseError = e instanceof Error ? e.message : 'Unknown parsing error';
         }
       }
