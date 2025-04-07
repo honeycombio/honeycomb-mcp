@@ -1,69 +1,9 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { handleToolError } from "../utils/tool-error.js";
-import { QueryToolSchema } from "../types/schema.js";
-import { summarizeResults } from "../utils/transformations.js";
+import { QueryToolSchema } from "../types/collection-schemas.js";
 import { validateQuery } from "../query/validation.js";
-
-/**
- * Helper function to execute a query and process the results
- */
-async function executeQuery(
-  api: HoneycombAPI, 
-  params: z.infer<typeof QueryToolSchema>,
-  hasHeatmap: boolean
-) {
-  // Execute the query
-  const result = await api.runAnalysisQuery(params.environment, params.dataset, params);
-  
-  try {
-    // Simplify the response to reduce context window usage
-    const simplifiedResponse = {
-      results: result.data?.results || [],
-      // Only include series data if heatmap calculation is present (it's usually large)
-      ...(hasHeatmap ? { series: result.data?.series || [] } : {}),
-      
-      // Include a query URL if available 
-      query_url: result.links?.query_url || null,
-      
-      // Add summary statistics for numeric columns
-      summary: summarizeResults(result.data?.results || [], params),
-      
-      // Add query metadata for context
-      metadata: {
-        environment: params.environment,
-        dataset: params.dataset,
-        executedAt: new Date().toISOString(),
-        resultCount: result.data?.results?.length || 0
-      }
-    };
-    
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(simplifiedResponse, null, 2),
-        },
-      ],
-    };
-  } catch (processingError) {
-    // Handle result processing errors separately to still return partial results
-    console.error("Error processing query results:", processingError);
-    
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            results: result.data?.results || [],
-            query_url: result.links?.query_url || null,
-            error: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`
-          }, null, 2),
-        },
-      ],
-    };
-  }
-}
+import { createTool } from "../utils/tool-factory.js";
+import { executeWithRetry, formatQueryResults } from "../utils/query-handler.js";
 
 /**
  * Creates a tool for running queries against a Honeycomb dataset or environment.
@@ -75,7 +15,7 @@ async function executeQuery(
  * @returns A configured tool object with name, schema, and handler
  */
 export function createRunQueryTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "run_query",
     description: `Executes a Honeycomb query, returning results with statistical summaries. 
 
@@ -216,108 +156,83 @@ COMMON ERRORS TO AVOID:
         value: z.number().describe("MUST use field name 'value'. Numeric threshold value to compare against.")
       })).optional().describe("MUST use field name 'havings'. Post-calculation filters with same column rules as calculations.")
     },
-    /**
-     * Handles the run_query tool request
-     * 
-     * @param params - The parameters for the query
-     * @returns A formatted response with query results and summary statistics
-     */
-    handler: async (params: any) => {
-      try {
-        // Handle query object nesting - common mistake is to put params inside a 'query' property
-        if (params.query && typeof params.query === 'object' && params.environment && params.dataset) {
-          console.warn("Detected nested query object - pulling properties to top level");
-          // Merge query properties into top level, but don't overwrite existing top-level properties
-          for (const [key, value] of Object.entries(params.query)) {
-            if (params[key] === undefined) {
-              params[key] = value;
-            }
+    
+    handler: async (params: any, api) => {
+      // Handle query object nesting - common mistake is to put params inside a 'query' property
+      if (params.query && typeof params.query === 'object' && params.environment && params.dataset) {
+        console.warn("Detected nested query object - pulling properties to top level");
+        // Merge query properties into top level, but don't overwrite existing top-level properties
+        for (const [key, value] of Object.entries(params.query)) {
+          if (params[key] === undefined) {
+            params[key] = value;
+          }
+        }
+        
+        // We've processed the query object, now delete it to avoid confusion
+        delete params.query;
+      }
+      
+      // Handle common field name mistakes
+      if (params.group_by && !params.breakdowns) {
+        params.breakdowns = params.group_by;
+        delete params.group_by;
+        console.warn("Detected 'group_by' field - renamed to 'breakdowns'");
+      }
+      
+      // Handle order_by -> orders conversion
+      if (params.order_by && !params.orders) {
+        // Convert single order_by object to orders array
+        if (!Array.isArray(params.order_by)) {
+          params.orders = [params.order_by];
+        } else {
+          params.orders = params.order_by;
+        }
+        delete params.order_by;
+        console.warn("Detected 'order_by' field - renamed to 'orders'");
+      }
+      
+      // Handle having -> havings conversion
+      if (params.having && !params.havings) {
+        params.havings = params.having;
+        delete params.having;
+        console.warn("Detected 'having' field - renamed to 'havings'");
+      }
+      
+      // Validate calculations array and field names
+      if (params.calculations) {
+        for (const calc of params.calculations) {
+          // Handle operation -> op conversion if needed
+          if (calc.operation && !calc.op) {
+            calc.op = calc.operation;
+            delete calc.operation;
+            console.warn("Detected 'operation' field in calculation - renamed to 'op'");
           }
           
-          // We've processed the query object, now delete it to avoid confusion
-          delete params.query;
-        }
-        
-        // Handle common field name mistakes
-        if (params.group_by && !params.breakdowns) {
-          params.breakdowns = params.group_by;
-          delete params.group_by;
-          console.warn("Detected 'group_by' field - renamed to 'breakdowns'");
-        }
-        
-        // Handle order_by -> orders conversion
-        if (params.order_by && !params.orders) {
-          // Convert single order_by object to orders array
-          if (!Array.isArray(params.order_by)) {
-            params.orders = [params.order_by];
-          } else {
-            params.orders = params.order_by;
-          }
-          delete params.order_by;
-          console.warn("Detected 'order_by' field - renamed to 'orders'");
-        }
-        
-        // Handle having -> havings conversion
-        if (params.having && !params.havings) {
-          params.havings = params.having;
-          delete params.having;
-          console.warn("Detected 'having' field - renamed to 'havings'");
-        }
-        
-        // Validate calculations array and field names
-        if (params.calculations) {
-          for (const calc of params.calculations) {
-            // Handle operation -> op conversion if needed
-            if (calc.operation && !calc.op) {
-              calc.op = calc.operation;
-              delete calc.operation;
-              console.warn("Detected 'operation' field in calculation - renamed to 'op'");
-            }
-            
-            // Handle field -> column conversion if needed
-            if (calc.field && !calc.column) {
-              calc.column = calc.field;
-              delete calc.field;
-              console.warn("Detected 'field' field in calculation - renamed to 'column'");
-            }
-            
-            // We now rely on Zod schema refinements for validation of column rules
+          // Handle field -> column conversion if needed
+          if (calc.field && !calc.column) {
+            calc.column = calc.field;
+            delete calc.field;
+            console.warn("Detected 'field' field in calculation - renamed to 'column'");
           }
         }
-        
-        // Validate parameters with our standard validation
-        validateQuery(params);
-        
-        // Check if any calculations use HEATMAP
-        const hasHeatmap = params.calculations.some((calc: any) => calc.op === "HEATMAP");
-        
-        // Execute the query with retry logic for transient API issues
-        const maxRetries = 3;
-        let lastError: unknown = null;
-        
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            return await executeQuery(api, params, hasHeatmap);
-          } catch (error) {
-            lastError = error;
-            console.error(`Query attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`);
-            
-            // Only retry if not the last attempt
-            if (attempt < maxRetries) {
-              console.error(`Retrying in ${attempt * 500}ms...`);
-              await new Promise(resolve => setTimeout(resolve, attempt * 500));
-            }
-          }
-        }
-        
-        // If we get here, all attempts failed
-        throw lastError || new Error("All query attempts failed");
-      } catch (error) {
-        return handleToolError(error, "run_query", {
-          environment: params.environment,
-          dataset: params.dataset
-        });
       }
+      
+      // Validate parameters with our standard validation
+      validateQuery(params);
+      
+      // Check if any calculations use HEATMAP
+      const hasHeatmap = params.calculations.some((calc: any) => calc.op === "HEATMAP");
+      
+      // Execute the query with retry logic for transient API issues
+      return executeWithRetry(async () => {
+        const result = await api.runAnalysisQuery(params.environment, params.dataset, params);
+        return formatQueryResults(result, params, hasHeatmap);
+      });
     },
-  };
+    
+    errorContext: (params) => ({
+      environment: params.environment,
+      dataset: params.dataset
+    })
+  });
 }

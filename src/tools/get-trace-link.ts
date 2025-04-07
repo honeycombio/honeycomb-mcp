@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
 import { handleToolError } from "../utils/tool-error.js";
-import { TraceDeepLinkSchema } from "../types/schema.js";
+import { TraceDeepLinkSchema } from "../types/collection-schemas.js";
+import { createTool } from "../utils/tool-factory.js";
 
 /**
  * Tool to generate a deep link to a specific trace in the Honeycomb UI. This tool returns a URL that can be used to directly access a trace, optionally highlighting a specific span and limiting the time range.
@@ -10,87 +11,79 @@ import { TraceDeepLinkSchema } from "../types/schema.js";
  * @returns An MCP tool object with name, schema, and handler function
  */
 export function createTraceDeepLinkTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "get_trace_link",
-    description: "Generates a direct deep link to a specific trace in the Honeycomb UI. This tool creates a URL that opens a specific distributed trace, optionally positioning to a particular span and time range. If no time range is specified, the trace must have been generated within two hours from the current time. If only the start time is provided, the end time is assumed to be 10 minutes from the start time.",
-    schema: {
-      environment: z.string().min(1).trim().describe("The Honeycomb environment"),
-      dataset: z.string().min(1).trim().describe("The dataset containing the trace"),
-      traceId: z.string().describe("The unique trace ID"),
-      spanId: z.string().optional().describe("The unique span ID to jump to within the trace"),
-      traceStartTs: z.number().int().nonnegative().optional().describe("Start timestamp in Unix epoch seconds"),
-      traceEndTs: z.number().int().nonnegative().optional().describe("End timestamp in Unix epoch seconds")
-    },
+    description: "Generates a direct deep link to a specific trace in the Honeycomb UI. This tool creates a URL that opens a specific distributed trace, optionally positioning to a particular span and time range.",
+    schema: TraceDeepLinkSchema,
+    
     /**
      * Handler for the get_trace_link tool
      * 
      * @param params - The parameters for the tool
-     * @returns A URL for direct access to the trace in the Honeycomb UI
+     * @param params.environment - The Honeycomb environment
+     * @param params.dataset - The dataset containing the trace
+     * @param params.traceId - The unique trace ID
+     * @param params.spanId - Optional unique span ID
+     * @param params.traceStartTs - Optional start timestamp
+     * @param params.traceEndTs - Optional end timestamp
+     * @returns A URL to the trace in the Honeycomb UI
      */
-    handler: async (params: z.infer<typeof TraceDeepLinkSchema>) => {
-      try {
-        // Validate required parameters
-        if (!params.environment) {
-          throw new Error("Missing required parameter: environment");
-        }
-        if (!params.dataset) {
-          throw new Error("Missing required parameter: dataset");
-        }
-        if (!params.traceId) {
-          throw new Error("Missing required parameter: traceId");
-        }
-
-        // Get the team slug for the environment
-        const teamSlug = await api.getTeamSlug(params.environment);
-        
-        // Start building the trace URL
-        let traceUrl = `https://ui.honeycomb.io/${teamSlug}/environments/${params.environment}/trace?trace_id=${encodeURIComponent(params.traceId)}`;
-        
-        // Add optional parameters if provided
-        if (params.spanId) {
-          traceUrl += `&span=${encodeURIComponent(params.spanId)}`;
-        }
-        
-        if (params.traceStartTs) {
-          traceUrl += `&trace_start_ts=${params.traceStartTs}`;
-        }
-        
-        if (params.traceEndTs) {
-          traceUrl += `&trace_end_ts=${params.traceEndTs}`;
-        }
-        
-        // Add dataset parameter for more specific context
-        if (params.dataset) {
-          // Insert the dataset before the trace part in the URL
-          traceUrl = traceUrl.replace(
-            `/trace?`,
-            `/datasets/${encodeURIComponent(params.dataset)}/trace?`
-          );
-        }
-        
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                url: traceUrl,
-                environment: params.environment,
-                dataset: params.dataset,
-                traceId: params.traceId,
-                team: teamSlug
-              }, null, 2),
-            },
-          ],
-          metadata: {
-            environment: params.environment,
-            dataset: params.dataset,
-            traceId: params.traceId,
-            team: teamSlug
-          }
-        };
-      } catch (error) {
-        return handleToolError(error, "get_trace_link");
+    handler: async (params: z.infer<typeof TraceDeepLinkSchema>, api) => {
+      // Extract parameters
+      const { environment, dataset, traceId, spanId, traceStartTs, traceEndTs } = params;
+      
+      // Validate required parameters
+      if (!environment) {
+        throw new Error("Missing required parameter: environment");
       }
-    }
-  };
+      if (!dataset) {
+        throw new Error("Missing required parameter: dataset");
+      }
+      if (!traceId) {
+        throw new Error("Missing required parameter: traceId");
+      }
+      
+      // Get the team slug
+      const teamSlug = await api.getTeamSlug(environment);
+      
+      // Construct the base URL
+      let url = `https://ui.honeycomb.io/${encodeURIComponent(teamSlug)}/environments/${encodeURIComponent(environment)}/datasets/${encodeURIComponent(dataset)}/trace?trace_id=${encodeURIComponent(traceId)}`;
+      
+      // Add optional parameters if provided
+      if (spanId) {
+        url += `&span=${encodeURIComponent(spanId)}`;
+      }
+      if (traceStartTs) {
+        url += `&trace_start_ts=${traceStartTs}`;
+      }
+      if (traceEndTs) {
+        url += `&trace_end_ts=${traceEndTs}`;
+      }
+      
+      // Return the URL
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              url,
+              environment,
+              dataset,
+              traceId,
+              team: teamSlug,
+              ...(spanId && { spanId }),
+              ...(traceStartTs && { traceStartTs }),
+              ...(traceEndTs && { traceEndTs })
+            }, null, 2),
+          },
+        ],
+      };
+    },
+    
+    errorContext: (params) => ({
+      environment: params.environment,
+      dataset: params.dataset,
+      traceId: params.traceId
+    })
+  });
 }

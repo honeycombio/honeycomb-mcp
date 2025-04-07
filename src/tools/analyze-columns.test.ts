@@ -3,9 +3,10 @@ import { createAnalyzeColumnsTool } from './analyze-columns.js';
 import { HoneycombError } from '../utils/errors.js';
 
 describe('analyze-columns tool', () => {
-  // Mock API
+  // Create more complete mock API to match our refactored structure
   const mockApi = {
-    analyzeColumns: vi.fn()
+    getVisibleColumns: vi.fn(),
+    analyzeColumn: vi.fn(),
   };
 
   // Reset mocks before each test
@@ -30,36 +31,58 @@ describe('analyze-columns tool', () => {
   });
 
   it('should process numeric data correctly', async () => {
-    // Setup mock API response
-    mockApi.analyzeColumns.mockResolvedValue({
-      data: {
-        results: [
-          { 
-            'test-column1': 'value1',
-            'test-column2': 'valueA',
-            COUNT: 10,
-            'AVG(test-column1)': 15.5,
-            'P95(test-column1)': 20,
-            'MAX(test-column1)': 30,
-            'MIN(test-column1)': 5
-          },
-          { 
-            'test-column1': 'value2',
-            'test-column2': 'valueB',
-            COUNT: 5
-          }
-        ]
+    // Mock the columns API response
+    mockApi.getVisibleColumns.mockResolvedValue([
+      { key_name: 'test-column1', type: 'float', hidden: false },
+      { key_name: 'test-column2', type: 'string', hidden: false }
+    ]);
+
+    // Mock the column analysis response for each column
+    mockApi.analyzeColumn.mockImplementation((env, dataset, column) => {
+      if (column === 'test-column1') {
+        return Promise.resolve({
+          sample_count: 10,
+          unique_count: 2,
+          top_values: [
+            { value: 'value1', count: 10 },
+            { value: 'value2', count: 5 }
+          ],
+          min: 5,
+          max: 30,
+          avg: 15.5,
+          p50: 15,
+          p90: 18,
+          p95: 20,
+          p99: 28
+        });
+      } else {
+        return Promise.resolve({
+          sample_count: 15,
+          unique_count: 2,
+          top_values: [
+            { value: 'valueA', count: 10 },
+            { value: 'valueB', count: 5 }
+          ]
+        });
       }
     });
 
     const tool = createAnalyzeColumnsTool(mockApi as any);
     const result = await tool.handler(testParams);
 
-    // Verify API was called with correct parameters
-    expect(mockApi.analyzeColumns).toHaveBeenCalledWith(
+    // Verify API calls
+    expect(mockApi.getVisibleColumns).toHaveBeenCalledWith(
+      testParams.environment,
+      testParams.dataset
+    );
+    
+    expect(mockApi.analyzeColumn).toHaveBeenCalledTimes(2);
+    
+    expect(mockApi.analyzeColumn).toHaveBeenCalledWith(
       testParams.environment,
       testParams.dataset,
-      testParams
+      'test-column1',
+      undefined
     );
 
     // Check response structure
@@ -72,25 +95,34 @@ describe('analyze-columns tool', () => {
     const response = JSON.parse(result.content[0]!.text!);
     
     // Verify contents
+    expect(response).toHaveProperty('environment', 'test-env');
+    expect(response).toHaveProperty('dataset', 'test-dataset');
     expect(response).toHaveProperty('columns');
-    expect(response.columns).toEqual(['test-column1', 'test-column2']);
-    expect(response).toHaveProperty('count', 2);
-    expect(response).toHaveProperty('totalEvents', 15);
-    expect(response).toHaveProperty('topValues');
-    expect(response.topValues).toHaveLength(2);
-    expect(response).toHaveProperty('stats');
-    expect(response.stats).toHaveProperty('test-column1');
-    expect(response.stats['test-column1']).toHaveProperty('avg', 15.5);
-    expect(response.stats['test-column1']).toHaveProperty('interpretation');
-    expect(response).toHaveProperty('cardinality');
-    expect(response.cardinality).toHaveProperty('uniqueCount', 2);
+    expect(response.columns).toHaveProperty('test-column1');
+    expect(response.columns).toHaveProperty('test-column2');
+    
+    // Check numeric column stats
+    expect(response.columns['test-column1']).toHaveProperty('numeric_stats');
+    expect(response.columns['test-column1'].numeric_stats).toHaveProperty('min', 5);
+    expect(response.columns['test-column1'].numeric_stats).toHaveProperty('max', 30);
+    expect(response.columns['test-column1'].numeric_stats).toHaveProperty('avg', 15.5);
+    expect(response.columns['test-column1'].numeric_stats).toHaveProperty('interpretation');
+    
+    // Check cardinality
+    expect(response.columns['test-column1']).toHaveProperty('cardinality', 'low');
   });
 
   it('should handle empty results', async () => {
-    mockApi.analyzeColumns.mockResolvedValue({
-      data: {
-        results: []
-      }
+    // Mock empty visible columns
+    mockApi.getVisibleColumns.mockResolvedValue([
+      { key_name: 'test-column1', type: 'string', hidden: false },
+      { key_name: 'test-column2', type: 'string', hidden: false }
+    ]);
+    
+    // Mock empty column analysis
+    mockApi.analyzeColumn.mockResolvedValue({
+      sample_count: 0,
+      unique_count: 0
     });
 
     const tool = createAnalyzeColumnsTool(mockApi as any);
@@ -104,18 +136,19 @@ describe('analyze-columns tool', () => {
     const response = JSON.parse(result.content[0]!.text!);
     
     // Verify simple response with no data
-    expect(response).toHaveProperty('columns', ['test-column1', 'test-column2']);
-    expect(response).toHaveProperty('count', 0);
-    expect(response).toHaveProperty('totalEvents', 0);
-    expect(response).not.toHaveProperty('topValues');
-    expect(response).not.toHaveProperty('stats');
-    expect(response).not.toHaveProperty('cardinality');
+    expect(response).toHaveProperty('environment', 'test-env');
+    expect(response).toHaveProperty('dataset', 'test-dataset');
+    expect(response).toHaveProperty('columns');
+    expect(response.columns).toHaveProperty('test-column1');
+    expect(response.columns).toHaveProperty('test-column2');
+    expect(response.columns['test-column1']).toHaveProperty('sample_count', 0);
+    expect(response.columns['test-column1']).toHaveProperty('unique_count', 0);
   });
 
   it('should handle API errors', async () => {
     // Setup API to throw an error
     const apiError = new HoneycombError(404, 'Dataset not found');
-    mockApi.analyzeColumns.mockRejectedValue(apiError);
+    mockApi.getVisibleColumns.mockRejectedValue(apiError);
 
     // Temporarily suppress console.error during this test
     const originalConsoleError = console.error;

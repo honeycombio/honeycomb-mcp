@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "honeycomb": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/austinparker/code/honeycomb-mcp/build/index.mjs"
+      ],
+      "env": {
+        "HONEYCOMB_API_KEY": "enAsCerePHItt1knHLngcU"
+      }
+    }
+  }
+}
