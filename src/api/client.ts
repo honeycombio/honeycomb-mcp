@@ -284,9 +284,14 @@ Response clone will be parsed and logged below...`);
             errorDetails.validationErrors = body.type_detail;
             
             // Add specific validation errors to suggestions
-            const validationInfo = body.type_detail.map((detail: any) => 
-              `Field '${detail.field || "unknown"}': ${detail.description || "invalid"} (code: ${detail.code || "unknown"})`
-            );
+            const validationInfo = body.type_detail.map((detail: any) => {
+              if (detail.field) {
+                return `Field '${detail.field}': ${detail.description || "invalid"} (code: ${detail.code || "unknown"})`;
+              } else {
+                // For validation errors without a field property (like the example above)
+                return `${detail.description || "Invalid input"} (code: ${detail.code || "unknown"})`;
+              }
+            });
             
             if (validationInfo.length > 0) {
               validationSuggestions.push(...validationInfo);
@@ -401,8 +406,18 @@ Response clone will be parsed and logged below...`);
         }
       } else if (response.status === 422) {
         suggestions.push(`Your request contains invalid parameters.`);
-        if (errorDetails.validationErrors) {
-          suggestions.push(`Review the validation errors in the details section.`);
+        
+        // Add specific validation error information to suggestions
+        if (errorDetails.validationErrors && Array.isArray(errorDetails.validationErrors)) {
+          errorDetails.validationErrors.forEach((detail: any) => {
+            if (detail.description) {
+              if (detail.field) {
+                suggestions.push(`Field '${detail.field}': ${detail.description}`);
+              } else {
+                suggestions.push(`${detail.description}`);
+              }
+            }
+          });
         }
       } else if (response.status >= 500) {
         suggestions.push(`There was a server-side issue with the Honeycomb API.`);
@@ -705,8 +720,9 @@ Response clone will be parsed and logged below...`);
           const errorDetails: Record<string, any> = {};
           
           // If error contains the Honeycomb validation format, extract it
-          if (error.details && error.details.validationErrors) {
-            errorDetails.validationErrors = error.details.validationErrors;
+          if (error.details) {
+            // Pass through all error details, including validationErrors, rawResponse, etc.
+            Object.assign(errorDetails, error.details);
           }
           
           // Create detailed validation error with context and validation details

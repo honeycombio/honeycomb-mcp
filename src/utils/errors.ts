@@ -91,6 +91,19 @@ export class HoneycombError extends Error {
       verificationSteps.push("For all other operations, a column field is REQUIRED");
     }
     
+    // Add validation details if provided
+    if (extraDetails.validationErrors && Array.isArray(extraDetails.validationErrors)) {
+      extraDetails.validationErrors.forEach((detail: any) => {
+        if (detail.description) {
+          if (detail.field) {
+            verificationSteps.push(`Fix field '${detail.field}': ${detail.description}`);
+          } else {
+            verificationSteps.push(`${detail.description}`);
+          }
+        }
+      });
+    }
+    
     // Build the final error message
     const baseMessage = `Query validation failed: ${message}`;
     const suggestionsText = suggestions.length > 0 ? 
@@ -144,12 +157,18 @@ export class HoneycombError extends Error {
         // Handle Honeycomb's RFC7807 format with type_detail
         if (Array.isArray(this.details.validationErrors) && 
             this.details.validationErrors.length > 0 &&
-            'field' in this.details.validationErrors[0]) {
+            (this.details.validationErrors[0] && 
+             (typeof this.details.validationErrors[0] === 'object') &&
+             ('code' in this.details.validationErrors[0] || 
+              'description' in this.details.validationErrors[0]))) {
           
           // Format specialized for Honeycomb type_detail format
           this.details.validationErrors.forEach((err: any, i: number) => {
-            if (err.field && err.code) {
-              output += `\n  ${i+1}. Field '${err.field}': ${err.description || 'Invalid'} (code: ${err.code})`;
+            if (err.field && err.description) {
+              output += `\n  ${i+1}. Field '${err.field}': ${err.description} (code: ${err.code || 'unknown'})`;
+            } else if (err.description) {
+              // For validation errors without a field property (like in the example)
+              output += `\n  ${i+1}. ${err.description} (code: ${err.code || 'unknown'})`;
             } else {
               output += `\n  ${i+1}. ${JSON.stringify(err)}`;
             }
