@@ -664,16 +664,59 @@ export class HoneycombAPI {
           if (error.details) {
             // Pass through all error details, including validationErrors, rawResponse, etc.
             Object.assign(errorDetails, error.details);
+            
+            // Make sure we properly extract the nested validation errors for display
+            if (error.details.rawResponse && 
+                error.details.rawResponse.type_detail && 
+                Array.isArray(error.details.rawResponse.type_detail)) {
+              
+              try {
+                // Create a deep copy of the validation errors to avoid reference issues
+                const validationErrors = JSON.parse(JSON.stringify(error.details.rawResponse.type_detail));
+                
+                // Only set if we have valid errors to avoid empty arrays
+                if (validationErrors.length > 0) {
+                  errorDetails.validationErrors = validationErrors;
+                  
+                  // Log validation errors for debugging (remove in production)
+                  console.debug("Extracted validation errors:", 
+                    validationErrors.map((err: any) => 
+                      err.description ? 
+                        (err.field ? `${err.field}: ${err.description}` : err.description) 
+                        : JSON.stringify(err)
+                    ).join(', ')
+                  );
+                }
+              } catch (parseError) {
+                // If JSON serialization fails, try a more direct approach
+                console.error("Error serializing validation details:", parseError);
+                
+                // Fall back to a direct copy with manual extraction of important fields
+                errorDetails.validationErrors = error.details.rawResponse.type_detail.map((detail: any) => {
+                  if (detail && typeof detail === 'object') {
+                    return {
+                      field: detail.field || null,
+                      code: detail.code || 'unknown',
+                      description: detail.description || JSON.stringify(detail)
+                    };
+                  }
+                  return { description: String(detail) };
+                });
+              }
+            }
           }
+          
+          // Include API route in the error message
+          const apiRoute = `/1/queries/${datasetSlug}`;
           
           // Create detailed validation error with context and validation details
           throw HoneycombError.createValidationError(
-            error.message,
+            `${error.message} (API route: ${apiRoute})`,
             {
               environment,
               dataset: datasetSlug,
               granularity: params.granularity,
-              api_route: `/1/queries/${datasetSlug}`
+              api_route: apiRoute
             },
             this,
             errorDetails

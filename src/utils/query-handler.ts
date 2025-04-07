@@ -2,7 +2,7 @@
  * Shared utilities for handling queries across different tools
  */
 import { summarizeResults } from "./transformations.js";
-import { ToolResponseContent } from "./tool-factory.js";
+import { ToolSuccessResponse, ToolErrorResponse } from "./tool-factory.js";
 
 /**
  * Helper function to execute a query and process the results
@@ -19,7 +19,7 @@ export function formatQueryResults(
   result: any,
   params: any,
   hasHeatmap: boolean = false
-): ToolResponseContent {
+): ToolSuccessResponse | ToolErrorResponse {
   try {
     // Simplify the response to reduce context window usage
     const simplifiedResponse = {
@@ -54,32 +54,22 @@ export function formatQueryResults(
     // Handle result processing errors separately to still return partial results
     console.error("Error processing query results:", processingError);
     
-    // Use a consistent format that matches our enhanced error handling
-    const errorDetails = processingError instanceof Error ? {
-      name: processingError.name,
-      stack: processingError.stack
-    } : {};
-    
-    // Return partial results along with error information
+    // Return partial results as best effort
     const partialResults = {
       results: result.data?.results || [],
-      query_url: result.links?.query_url || null
+      query_url: result.links?.query_url || null,
+      error: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`
     };
     
+    // Return in the correct error format
     return {
+      isError: true,
       content: [
         {
           type: "text",
-          text: JSON.stringify(partialResults, null, 2),
+          text: `Error: Processing failed but partial results available: ${JSON.stringify(partialResults, null, 2)}`,
         },
-      ],
-      error: {
-        message: `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`,
-        details: {
-          ...errorDetails,
-          partialResults: true
-        }
-      }
+      ]
     };
   }
 }

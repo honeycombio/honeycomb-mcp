@@ -28,22 +28,37 @@ export class HoneycombError extends Error {
     api?: any,
     extraDetails: Record<string, any> = {}
   ): HoneycombError {
-    // Format the context as a string for display
-    const contextStr = Object.entries(context)
-      .filter(([_, value]) => value !== undefined)
-      .map(([key, value]) => `${key}="${value}"`)
-      .join(", ");
-    
     // Start building suggestions based on the error and context
     const suggestions: string[] = [];
     
-    // Add context information as first suggestion
-    if (contextStr) {
-      suggestions.push(contextStr);
+    // Track API-specific validation errors vs general guidance
+    const validationErrors: string[] = [];
+    const generalGuidance: string[] = [];
+    
+    // Extract validation errors first (highest priority)
+    if (extraDetails.validationErrors && Array.isArray(extraDetails.validationErrors)) {
+      extraDetails.validationErrors.forEach((detail: any) => {
+        if (detail.description) {
+          if (detail.field) {
+            validationErrors.push(`Field '${detail.field}': ${detail.description}`);
+            suggestions.push(`Fix field '${detail.field}': ${detail.description}`);
+          } else {
+            validationErrors.push(`${detail.description}`);
+            suggestions.push(`${detail.description}`);
+          }
+        }
+      });
     }
     
-    // Create detailed verification steps based on the error type and context
-    let verificationSteps: string[] = [];
+    // Add specific advice based on the error message
+    if (message.includes("time_range") || message.includes("start_time") || message.includes("end_time")) {
+      generalGuidance.push("Check your time range parameters - either use time_range OR start_time and end_time together");
+    }
+    
+    if (message.includes("calculations") || message.includes("calculation")) {
+      generalGuidance.push("For COUNT operations, DO NOT include a column field");
+      generalGuidance.push("For all other operations, a column field is REQUIRED");
+    }
     
     // If we have access to the API client, we can provide more specific help
     if (api && typeof api.getEnvironments === 'function') {
@@ -53,71 +68,65 @@ export class HoneycombError extends Error {
       if (context.environment) {
         if (!environments.includes(context.environment)) {
           // Environment doesn't exist
-          verificationSteps.push(`The environment "${context.environment}" was not found. Available environments: ${environments.join(", ")}`);
+          generalGuidance.push(`The environment "${context.environment}" was not found. Available environments: ${environments.join(", ")}`);
         } else {
           // Environment exists, so API key is valid - issue is likely with dataset or query
           if (context.dataset) {
-            verificationSteps.push(`Verify the dataset "${context.dataset}" exists in environment "${context.environment}" and you have access to it`);
+            generalGuidance.push(`Verify the dataset "${context.dataset}" exists in environment "${context.environment}" and you have access to it`);
           }
-          verificationSteps.push("Check your query parameters for syntax or logical errors");
+          generalGuidance.push("Check your query parameters for syntax or logical errors");
         }
       } else {
         // No environment specified
-        verificationSteps.push(`Specify a valid environment. Available environments: ${environments.join(", ")}`);
+        generalGuidance.push(`Specify a valid environment. Available environments: ${environments.join(", ")}`);
       }
     } else {
       // Without API client, give more generic suggestions
       if (context.environment) {
-        verificationSteps.push(`Verify the environment "${context.environment}" is correctly configured`);
+        generalGuidance.push(`Verify the environment "${context.environment}" is correctly configured`);
       } else {
-        verificationSteps.push("Specify a valid environment name");
+        generalGuidance.push("Specify a valid environment name");
       }
       
       if (context.dataset) {
-        verificationSteps.push(`Verify the dataset "${context.dataset}" exists and you have access to it`);
+        generalGuidance.push(`Verify the dataset "${context.dataset}" exists and you have access to it`);
       }
       
       // Always suggest checking query parameters
-      verificationSteps.push("Check that your query parameters follow the required format and constraints");
+      generalGuidance.push("Check that your query parameters follow the required format and constraints");
     }
     
-    // Add specific advice based on the error message
-    if (message.includes("time_range") || message.includes("start_time") || message.includes("end_time")) {
-      verificationSteps.push("Check your time range parameters - either use time_range OR start_time and end_time together");
+    // Add general guidance to suggestions if we don't have specific validation errors
+    if (validationErrors.length === 0) {
+      suggestions.push(...generalGuidance);
     }
     
-    if (message.includes("calculations") || message.includes("calculation")) {
-      verificationSteps.push("For COUNT operations, DO NOT include a column field");
-      verificationSteps.push("For all other operations, a column field is REQUIRED");
-    }
-    
-    // Add validation details if provided
-    if (extraDetails.validationErrors && Array.isArray(extraDetails.validationErrors)) {
-      extraDetails.validationErrors.forEach((detail: any) => {
-        if (detail.description) {
-          if (detail.field) {
-            verificationSteps.push(`Fix field '${detail.field}': ${detail.description}`);
-          } else {
-            verificationSteps.push(`${detail.description}`);
-          }
-        }
-      });
-    }
-    
-    // Build the final error message
+    // Build the final error message with a clearer format
     const baseMessage = `Query validation failed: ${message}`;
-    const suggestionsText = suggestions.length > 0 ? 
-      `\n\nSuggested next steps:\n${suggestions.map(s => `- ${s}`).join("\n")}` : "";
-    const verificationText = verificationSteps.length > 0 ? 
-      `\n\nPlease verify:\n${verificationSteps.map(s => `- ${s}`).join("\n")}` : "";
+    
+    // For specific validation errors section
+    const validationErrorsText = validationErrors.length > 0 ? 
+      `\n\nValidation Errors:\n${validationErrors.map(s => `- ${s}`).join("\n")}` : "";
+    
+    // For general guidance section (only shown if we have specific errors or if it's the only guidance)
+    const generalGuidanceText = (generalGuidance.length > 0 && (validationErrors.length > 0 || validationErrors.length === 0)) ? 
+      `\n\nGeneral Guidance:\n${generalGuidance.map(s => `- ${s}`).join("\n")}` : "";
+    
+    // Create the context metadata but don't include it in the visible message
+    const contextMetadata = {
+      environment: context.environment,
+      dataset: context.dataset,
+      api_route: context.api_route
+    };
     
     return new HoneycombError(
       422,
-      `${baseMessage}${suggestionsText}${verificationText}`,
+      `${baseMessage}${validationErrorsText}${generalGuidanceText}`,
       suggestions,
       { 
-        context,
-        verificationSteps,
+        context: contextMetadata,
+        validationErrors: extraDetails.validationErrors || [],
+        generalGuidance,
         ...extraDetails
       }
     );
@@ -135,23 +144,83 @@ export class HoneycombError extends Error {
    * Get a formatted error message including suggestions and optionally details
    */
   getFormattedMessage(includeDetails: boolean = false): string {
+    // Start with the core message without any validation details
+    // (validation details should be part of the message structure, not duplicated here)
     let output = this.message;
     
-    if (this.suggestions.length > 0) {
+    // Only add suggestions section if not already included in the message
+    // and we have suggestions that aren't just technical context
+    const nonContextSuggestions = this.suggestions.filter(s => 
+      !s.includes('=') && !s.match(/^[a-z_]+=".+"$/)
+    );
+    
+    if (nonContextSuggestions.length > 0 && !output.includes('Suggested next steps:') && !output.includes('Validation Errors:')) {
       output += "\n\nSuggested next steps:";
-      this.suggestions.forEach(suggestion => {
+      nonContextSuggestions.forEach(suggestion => {
         output += `\n- ${suggestion}`;
       });
     }
     
     // Include error details for debugging if requested
     if (includeDetails && Object.keys(this.details).length > 0) {
-      output += "\n\nError details:";
+      output += "\n\nTechnical details:";
       
-      // Handle specific error fields that get special formatting
+      // Handle API-specific error codes if available
+      if (this.details.code) {
+        output += `\nError code: ${this.details.code}`;
+      }
       
-      // Handle validation errors specially
-      if (this.details.validationErrors) {
+      // Add JSONAPI error details if available
+      if (this.details.title) {
+        output += `\nTitle: ${this.details.title}`;
+      }
+      if (this.details.detail) {
+        output += `\nDetail: ${this.details.detail}`;
+      }
+      
+      // Include request ID for support if available
+      if (this.details.requestId) {
+        output += `\nRequest ID: ${this.details.requestId}`;
+      }
+      
+      // Include context information (but more concisely)
+      if (this.details.context) {
+        const { environment, dataset, api_route } = this.details.context as Record<string, any>;
+        if (environment || dataset || api_route) {
+          output += "\nContext:";
+          if (environment) output += `\n  Environment: ${environment}`;
+          if (dataset) output += `\n  Dataset: ${dataset}`;
+          if (api_route) output += `\n  API route: ${api_route}`;
+        }
+      }
+      
+      // Include any API response details
+      if (this.details.statusCode) {
+        output += `\nStatus code: ${this.details.statusCode}`;
+      }
+      
+      if (this.details.contentType) {
+        output += `\nContent type: ${this.details.contentType}`;
+      }
+      
+      // Include raw response for debugging, but truncate if too large
+      if (this.details.rawResponse && includeDetails) {
+        try {
+          const responseStr = JSON.stringify(this.details.rawResponse);
+          const truncated = responseStr.length > 500 ? responseStr.substring(0, 500) + '...' : responseStr;
+          output += `\nAPI response: ${truncated}`;
+        } catch (e) {
+          output += `\nAPI response: [Complex object that could not be stringified]`;
+        }
+      }
+      
+      // Include rate limit info
+      if (this.details.rateLimit) {
+        output += `\nRate limit: ${this.details.rateLimit}`;
+      }
+      
+      // Include validation errors for debugging if they weren't already in the main message
+      if (this.details.validationErrors && !output.includes('Validation Errors:')) {
         output += "\nValidation errors:";
         
         // Handle Honeycomb's RFC7807 format with type_detail
@@ -170,70 +239,53 @@ export class HoneycombError extends Error {
               // For validation errors without a field property (like in the example)
               output += `\n  ${i+1}. ${err.description} (code: ${err.code || 'unknown'})`;
             } else {
-              output += `\n  ${i+1}. ${JSON.stringify(err)}`;
+              // Ensure proper stringification of complex objects
+              try {
+                output += `\n  ${i+1}. ${JSON.stringify(err, null, 2)}`;
+              } catch (stringifyError) {
+                // Fallback to simple properties if JSON.stringify fails
+                output += `\n  ${i+1}. [Object with properties: ${Object.keys(err).join(', ')}]`;
+              }
             }
           });
         } 
         // Handle generic array of validation errors
         else if (Array.isArray(this.details.validationErrors)) {
           this.details.validationErrors.forEach((err: any, i: number) => {
-            output += `\n  ${i+1}. ${typeof err === 'string' ? err : JSON.stringify(err)}`;
+            if (typeof err === 'string') {
+              output += `\n  ${i+1}. ${err}`;
+            } else if (err && typeof err === 'object') {
+              // Handle object validation errors more carefully
+              try {
+                output += `\n  ${i+1}. ${JSON.stringify(err, null, 2)}`;
+              } catch (stringifyError) {
+                // Fallback if JSON.stringify fails
+                output += `\n  ${i+1}. [Object with properties: ${Object.keys(err).join(', ')}]`;
+              }
+            } else {
+              output += `\n  ${i+1}. ${String(err)}`;
+            }
           });
         } 
         // Handle object or other formats
         else {
-          output += `\n  ${JSON.stringify(this.details.validationErrors)}`;
+          try {
+            output += `\n  ${JSON.stringify(this.details.validationErrors, null, 2)}`;
+          } catch (stringifyError) {
+            // Fallback if JSON.stringify fails
+            if (typeof this.details.validationErrors === 'object' && this.details.validationErrors !== null) {
+              output += `\n  [Object with properties: ${Object.keys(this.details.validationErrors).join(', ')}]`;
+            } else {
+              output += `\n  ${String(this.details.validationErrors)}`;
+            }
+          }
         }
-      }
-      
-      // Add API-specific error codes if available
-      if (this.details.code) {
-        output += `\nError code: ${this.details.code}`;
-      }
-      
-      // Add JSONAPI error details if available
-      if (this.details.title) {
-        output += `\nTitle: ${this.details.title}`;
-      }
-      if (this.details.detail) {
-        output += `\nDetail: ${this.details.detail}`;
-      }
-      
-      // Include request ID for support if available
-      if (this.details.requestId) {
-        output += `\nRequest ID: ${this.details.requestId}`;
-      }
-      
-      // Include context information if available
-      if (this.details.context) {
-        output += `\nContext: ${JSON.stringify(this.details.context, null, 2)}`;
-      }
-      
-      // Include any API response details
-      if (this.details.statusCode) {
-        output += `\nStatus code: ${this.details.statusCode}`;
-      }
-      
-      if (this.details.contentType) {
-        output += `\nContent type: ${this.details.contentType}`;
-      }
-      
-      // Include raw response for debugging, but truncate if too large
-      if (this.details.rawResponse) {
-        const responseStr = JSON.stringify(this.details.rawResponse);
-        const truncated = responseStr.length > 500 ? responseStr.substring(0, 500) + '...' : responseStr;
-        output += `\nAPI response: ${truncated}`;
-      }
-      
-      // Include rate limit info
-      if (this.details.rateLimit) {
-        output += `\nRate limit: ${this.details.rateLimit}`;
       }
       
       // Loop through any other details not already handled
       const handledKeys = ['validationErrors', 'code', 'title', 'detail', 
                            'requestId', 'context', 'statusCode', 'contentType', 
-                           'rawResponse', 'rateLimit'];
+                           'rawResponse', 'rateLimit', 'generalGuidance'];
       
       const otherDetails = Object.entries(this.details)
         .filter(([key]) => !handledKeys.includes(key));
@@ -243,7 +295,11 @@ export class HoneycombError extends Error {
         otherDetails.forEach(([key, value]) => {
           // For objects or arrays, use JSON stringify with indentation
           if (typeof value === 'object' && value !== null) {
-            output += `\n${key}: ${JSON.stringify(value, null, 2)}`;
+            try {
+              output += `\n${key}: ${JSON.stringify(value, null, 2)}`;
+            } catch (e) {
+              output += `\n${key}: [Complex object that could not be stringified]`;
+            }
           } else {
             output += `\n${key}: ${value}`;
           }

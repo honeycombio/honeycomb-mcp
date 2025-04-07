@@ -6,15 +6,24 @@ import { handleToolError } from "./tool-error.js";
 import { HoneycombAPI } from "../api/client.js";
 
 /**
- * Type for tool response content
+ * Type for tool response content - success case
  */
-export interface ToolResponseContent {
+export interface ToolSuccessResponse {
   content: { type: string; text: string; }[];
-  error?: {
-    message: string;
-    details?: Record<string, any>;
-  };
 }
+
+/**
+ * Type for tool response content - error case
+ */
+export interface ToolErrorResponse {
+  isError: true;
+  content: { type: string; text: string; }[];
+}
+
+/**
+ * Type for tool response content (either success or error)
+ */
+export type ToolResponseContent = ToolSuccessResponse | ToolErrorResponse;
 
 /**
  * Type for tool definition
@@ -68,6 +77,8 @@ export function createTool<TParams>(
         const context = options.errorContext ? 
           { ...options.errorContext(params), api } : 
           { api };
+        
+        // The handleToolError function returns a properly formatted error response
         return handleToolError(error, options.name, context);
       }
     }

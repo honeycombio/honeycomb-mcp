@@ -78,12 +78,12 @@ describe("list-boards tool", () => {
 
     // Type assertion to tell TypeScript this is an error result
     const errorResult = result as { 
+      isError: true;
       content: { type: string; text: string }[]; 
-      error: { message: string } 
     };
 
-    expect(errorResult.error).toBeDefined();
-    expect(errorResult.error.message).toContain("API error");
+    expect(errorResult.isError).toBe(true);
+    expect(errorResult.content[0]?.text).toContain("API error");
   });
 
   it("requires the environment parameter", async () => {
@@ -98,12 +98,12 @@ describe("list-boards tool", () => {
 
     // Type assertion to tell TypeScript this is an error result
     const errorResult = result as { 
+      isError: true;
       content: { type: string; text: string }[]; 
-      error: { message: string } 
     };
 
-    expect(errorResult.error).toBeDefined();
-    expect(errorResult.error.message).toContain("environment parameter is required");
+    expect(errorResult.isError).toBe(true);
+    expect(errorResult.content[0]?.text).toContain("environment parameter is required");
   });
 
   it("handles undefined boards response", async () => {

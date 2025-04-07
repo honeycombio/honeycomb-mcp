@@ -3,6 +3,9 @@ import { z } from "zod";
 
 /**
  * Handles errors from tool execution and returns a formatted error response
+ * 
+ * This follows the required format for tool errors:
+ * { isError: true, content: [{ type: "text", text: "Error message" }] }
  */
 export async function handleToolError(
   error: unknown,
@@ -14,19 +17,16 @@ export async function handleToolError(
     api?: any;
   } = {}
 ): Promise<{
+  isError: true;
   content: { type: "text"; text: string }[];
-  error: { 
-    message: string;
-    details?: Record<string, any>;
-  };
 }> {
   let errorMessage = "Unknown error occurred";
-  let suggestions: string[] = [];
   let errorDetails: Record<string, any> = {};
 
   if (error instanceof HoneycombError) {
-    // Use the enhanced error message system with details
-    errorMessage = error.getFormattedMessage(true);
+    // Use the enhanced error message system
+    // Get a clean message without duplicating technical details
+    errorMessage = error.message;
     errorDetails = error.details;
   } else if (error instanceof z.ZodError) {
     // For Zod validation errors, create a validation error with context
@@ -46,11 +46,9 @@ export async function handleToolError(
         code: err.code,
       }))
     });
-    errorMessage = validationError.getFormattedMessage(true);
-    errorDetails = validationError.details;
+    errorMessage = validationError.message;
   } else if (error instanceof Error) {
     errorMessage = error.message;
-    errorDetails = { errorType: error.name, stack: error.stack };
   }
 
   // Log the error to stderr for debugging, unless suppressed
@@ -58,27 +56,17 @@ export async function handleToolError(
     console.error(`Tool '${toolName}' failed:`, error);
   }
 
-  // Store the detailed error information for debugging
-  const errorWithDetails = error instanceof HoneycombError ? 
-    error.getFormattedMessage(true) : errorMessage;
-  
-  // For the content text, include complete information with details
-  const helpText = `Failed to execute tool '${toolName}': ${errorWithDetails}`;
+  // Format the error message for the content text - maintain the expected format for tests
+  const displayMessage = `Failed to execute tool '${toolName}': ${errorMessage}`;
 
-  // For the error.message, include just the core message without duplicating verification steps
-  const coreErrorMessage = error instanceof HoneycombError ? 
-    error.message : errorMessage;
-
+  // Return the error in the exact format required by the tool API
   return {
+    isError: true,
     content: [
       {
         type: "text",
-        text: helpText,
+        text: displayMessage,
       },
-    ],
-    error: {
-      message: coreErrorMessage,
-      details: errorDetails
-    }
+    ]
   };
 }
