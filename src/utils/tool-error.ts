@@ -14,7 +14,10 @@ export async function handleToolError(
   } = {}
 ): Promise<{
   content: { type: "text"; text: string }[];
-  error: { message: string; };
+  error: { 
+    message: string;
+    details?: Record<string, any>;
+  };
 }> {
   let errorMessage = "Unknown error occurred";
   let suggestions: string[] = [];
@@ -53,12 +56,16 @@ export async function handleToolError(
     console.error(`Tool '${toolName}' failed:`, error);
   }
 
-  let helpText = `Failed to execute tool '${toolName}': ${errorMessage}\n\n` +
-    `Please verify:\n` +
-    `- The environment name is correct and configured via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY\n` +
-    `- Your API key is valid\n` +
-    `- The dataset exists and you have access to it\n` +
-    `- Your query parameters are valid\n`;
+  // Store the detailed error information for debugging
+  const errorWithDetails = error instanceof HoneycombError ? 
+    error.getFormattedMessage(true) : errorMessage;
+  
+  // For the content text, include complete information with details
+  const helpText = `Failed to execute tool '${toolName}': ${errorWithDetails}`;
+
+  // For the error.message, include just the core message without duplicating verification steps
+  const coreErrorMessage = error instanceof HoneycombError ? 
+    error.message : errorMessage;
 
   return {
     content: [
@@ -68,7 +75,8 @@ export async function handleToolError(
       },
     ],
     error: {
-      message: errorMessage
+      message: coreErrorMessage,
+      details: errorDetails
     }
   };
 }

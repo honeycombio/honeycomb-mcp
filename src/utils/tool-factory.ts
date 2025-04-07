@@ -10,6 +10,10 @@ import { HoneycombAPI } from "../api/client.js";
  */
 export interface ToolResponseContent {
   content: { type: string; text: string; }[];
+  error?: {
+    message: string;
+    details?: Record<string, any>;
+  };
 }
 
 /**

@@ -52,6 +52,10 @@ export interface MessageContent {
 
 export interface ToolResponse {
   content: MessageContent[];
+  error?: {
+    message: string;
+    details?: Record<string, any>;
+  };
 }
 
 export interface PromptResponse {
