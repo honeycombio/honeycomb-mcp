@@ -2,6 +2,7 @@ node_modules
 build
 .env
 .mcp-honeycomb.json
+.mcp.json
 eval/results/
 eval/reports/
 .DS_Store

@@ -14,7 +14,6 @@ import { createGetTriggerTool } from "./get-trigger.js";
 import { createTraceDeepLinkTool } from "./get-trace-link.js";
 import { createInstrumentationGuidanceTool } from "./instrumentation-guidance.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 
 /**
  * Register all tools with the MCP server
@@ -66,14 +65,7 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
       tool.schema, 
       async (args: Record<string, any>, extra: any) => {
         try {
-          // Validate and ensure required fields are present before passing to handler
-          if (tool.name.includes("analyze_columns") && (!args.environment || !args.dataset || !args.columns)) {
-            throw new Error("Missing required fields: environment, dataset, and columns are required");
-          } else if (tool.name.includes("run_query") && (!args.environment || !args.dataset)) {
-            throw new Error("Missing required fields: environment and dataset are required");
-          }
-          
-          // Use type assertion to satisfy TypeScript's type checking
+          // All validation should now be handled in each tool's handler
           const result = await tool.handler(args as any);
           
           // If the result already has the expected format, return it directly
@@ -91,7 +83,7 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
             ],
           } as any;
         } catch (error) {
-          // Format errors to match the SDK's expected format
+          // Format errors to match the SDK's expected format (though most errors should now be handled by the tool itself)
           return {
             content: [
               {

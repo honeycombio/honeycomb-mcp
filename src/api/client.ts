@@ -4,7 +4,8 @@ import {
   AnalysisQuery,
   QueryCalculation,
 } from "../types/query.js";
-import { QueryToolSchema, ColumnAnalysisSchema } from "../types/schema.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
+import { ColumnAnalysisSchema } from "../types/query-schemas.js";
 import { HoneycombError } from "../utils/errors.js";
 import { Column } from "../types/column.js";
 import { Dataset, AuthResponse } from "../types/api.js";

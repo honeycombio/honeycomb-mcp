@@ -1,12 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createTraceDeepLinkTool } from "./get-trace-link.js";
 import { handleToolError } from "../utils/tool-error.js";
+import * as toolFactory from "../utils/tool-factory.js";
 
 // Mock the handleToolError function
 vi.mock("../utils/tool-error.js", () => ({
   handleToolError: vi.fn((error) => ({
     content: [{ type: "text", text: error.message }],
     isError: true
+  }))
+}));
+
+// Mock the tool factory to pass through the handler
+vi.mock("../utils/tool-factory.js", () => ({
+  createTool: vi.fn((api, options) => ({
+    name: options.name,
+    description: options.description,
+    schema: options.schema,
+    handler: (params: any) => options.handler(params, api),
   }))
 }));
 
@@ -101,26 +112,31 @@ describe("createTraceDeepLinkTool", () => {
   });
 
   it("should handle error when required parameters are missing", async () => {
+    // Mock the handleToolError to throw the original error in the test
+    const createToolSpy = vi.spyOn(toolFactory, 'createTool');
+    
+    // Extract the handler function from the createTool call
     const tool = createTraceDeepLinkTool(mockApi as any);
+    const createToolCallOptions = createToolSpy.mock.calls[0]?.[1];
+    if (!createToolCallOptions) {
+      throw new Error('createTool was not called with expected arguments');
+    }
+    const handlerFn = createToolCallOptions.handler;
     
-    // Missing environment
-    await tool.handler({
-      dataset: "test-dataset",
-      traceId: "abc123",
-    } as any);
-    
-    expect(handleToolError).toHaveBeenCalledWith(expect.objectContaining({
-      message: "Missing required parameter: environment"
-    }), "get_trace_link");
+    // Test with missing environment
+    await expect(async () => {
+      await handlerFn({
+        dataset: "test-dataset",
+        traceId: "abc123",
+      }, mockApi as any);
+    }).rejects.toThrow("Missing required parameter: environment");
 
-    // Missing traceId
-    await tool.handler({
-      environment: "test-env",
-      dataset: "test-dataset",
-    } as any);
-    
-    expect(handleToolError).toHaveBeenCalledWith(expect.objectContaining({
-      message: "Missing required parameter: traceId"
-    }), "get_trace_link");
+    // Test with missing traceId
+    await expect(async () => {
+      await handlerFn({
+        environment: "test-env",
+        dataset: "test-dataset",
+      }, mockApi as any);
+    }).rejects.toThrow("Missing required parameter: traceId");
   });
 });

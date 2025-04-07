@@ -1,7 +1,7 @@
 import { calculateStdDev, getTopValues, TopValueItem } from "./functions.js";
 import { QueryResultValue } from "../types/query.js";
 import { z } from "zod";
-import { QueryToolSchema } from "../types/schema.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
 import { isValidNumber } from "./typeguards.js";
 
 /**

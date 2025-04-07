@@ -1,176 +1,186 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { handleToolError } from "../utils/tool-error.js";
-import { ColumnAnalysisSchema } from "../types/schema.js";
+import { ColumnAnalysisSchema } from "../types/query-schemas.js";
 import { generateInterpretation, getCardinalityClassification } from "../utils/analysis.js";
 import { 
-  SimplifiedColumnAnalysis, 
   NumericStatistics, 
-  NumericStatsWithInterpretation 
+  NumericStatsWithInterpretation,
+  SimplifiedColumnAnalysis
 } from "../types/analysis.js";
-import { QueryResultValue } from "../types/query.js";
-
-const description = `Analyzes specific columns in a dataset by running statistical queries and returning computed metrics.
-This tool allows users to get statistical information about a specific column, including value distribution, top values, and numeric statistics (for numeric columns).
-Supports analyzing up to 10 columns at once by specifying an array of column names in the 'columns' parameter.
-When multiple columns are specified, they will be analyzed together as a group, showing the distribution of their combined values.
-Use this tool before running queries to get a better understanding of the data in your dataset.
-`
+import { createTool } from "../utils/tool-factory.js";
+import { executeWithRetry } from "../utils/query-handler.js";
 
 /**
- * Creates a tool for analyzing multiple columns in a Honeycomb dataset
+ * Tool to analyze a specific column in a dataset by running statistical queries and returning computed metrics.
  * 
- * This tool allows users to get statistical information about specific columns,
- * including value distribution, top values, and numeric statistics (for numeric columns).
- * It can analyze up to 10 columns at once.
+ * This tool allows users to get statistical information about specific columns, including value distribution,
+ * top values, and numeric statistics (for numeric columns).
  * 
  * @param api - The Honeycomb API client
  * @returns A configured tool object with name, schema, and handler
  */
 export function createAnalyzeColumnsTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "analyze_columns",
-    description,
-    schema: ColumnAnalysisSchema.shape,
-    /**
-     * Handles the analyze_column tool request
-     * 
-     * @param params - The parameters for the column analysis
-     * @returns A formatted response with column analysis data
-     */
-    handler: async (params: z.infer<typeof ColumnAnalysisSchema>) => {
-      try {
-        // Validate required parameters
-        if (!params.environment) {
-          throw new Error("Missing required parameter: environment");
-        }
-        if (!params.dataset) {
-          throw new Error("Missing required parameter: dataset");
-        }
-        if (!params.columns || params.columns.length === 0) {
-          throw new Error("Missing required parameter: columns");
-        }
-        if (params.columns.length > 10) {
-          throw new Error("Too many columns requested. Maximum is 10.");
-        }
-        
-        // Execute the analysis via the API
-        const result = await api.analyzeColumns(params.environment, params.dataset, params);
-        
-        // Initialize the response
-        const simplifiedResponse: SimplifiedColumnAnalysis = {
-          columns: params.columns,
-          count: result.data?.results?.length || 0,
-          totalEvents: 0,  // Will be populated below if available
-        };
-        
-        // Add top values if we have results
-        if (result.data?.results && result.data.results.length > 0) {
-          const results = result.data.results as QueryResultValue[];
-          const firstResult = results[0];
-          
-          try {
-            // Calculate total events across all results
-            const totalCount = results.reduce((sum, row) => {
-              const count = row.COUNT as number | undefined;
-              // Only add if it's a number, otherwise use 0
-              return sum + (typeof count === 'number' ? count : 0);
-            }, 0);
-            simplifiedResponse.totalEvents = totalCount;
-            
-            // Add top values with their counts and percentages
-            simplifiedResponse.topValues = results.map(row => {
-              // For multi-column analysis, combine values into a descriptive string
-              const combinedValue = params.columns
-                .map(col => {
-                  const colValue = row[col] !== undefined ? row[col] : null;
-                  return `${col}: ${colValue}`;
-                })
-                .join(', ');
-              
-              const count = typeof row.COUNT === 'number' ? row.COUNT : 0;
-              
-              return {
-                value: combinedValue,
-                count,
-                percentage: totalCount > 0 ? 
-                  ((count / totalCount) * 100).toFixed(2) + '%' : 
-                  '0%'
-              };
-            });
-            
-            // Initialize stats container for each numeric column
-            const numericStats: Record<string, NumericStatsWithInterpretation> = {};
-            
-            // Process numeric metrics for each column if available
-            if (firstResult) {
-              params.columns.forEach(column => {
-                // Check if we have numeric metrics for this column
-                const avgKey = `AVG(${column})`;
-                if (avgKey in firstResult) {
-                  const stats: NumericStatistics = {};
-                  
-                  // Extract metrics for this column
-                  if (typeof firstResult[avgKey] === 'number') stats.avg = firstResult[avgKey] as number;
-                  if (typeof firstResult[`P95(${column})`] === 'number') stats.p95 = firstResult[`P95(${column})`] as number;
-                  if (typeof firstResult[`MAX(${column})`] === 'number') stats.max = firstResult[`MAX(${column})`] as number;
-                  if (typeof firstResult[`MIN(${column})`] === 'number') stats.min = firstResult[`MIN(${column})`] as number;
-                  
-                  // Calculate range if we have min and max
-                  if (stats.min !== undefined && stats.max !== undefined) {
-                    stats.range = stats.max - stats.min;
-                  }
-                  
-                  // Only add if we have at least one stat
-                  if (Object.keys(stats).length > 0) {
-                    numericStats[column] = {
-                      ...stats,
-                      interpretation: generateInterpretation(stats, column)
-                    } as NumericStatsWithInterpretation;
-                  }
-                }
-              });
-            }
-            
-            // Add stats if we have any
-            if (Object.keys(numericStats).length > 0) {
-              simplifiedResponse.stats = numericStats;
-            }
-            
-            // Add cardinality information (unique combinations of values)
-            const uniqueValueCombinations = new Set();
-            
-            results.forEach(row => {
-              const combinationKey = params.columns
-                .map(col => `${col}:${row[col] !== undefined ? row[col] : 'null'}`)
-                .join('|');
-              uniqueValueCombinations.add(combinationKey);
-            });
-            
-            const uniqueCount = uniqueValueCombinations.size;
-            
-            simplifiedResponse.cardinality = {
-              uniqueCount,
-              classification: getCardinalityClassification(uniqueCount)
-            };
-          } catch (processingError) {
-            // Handle errors during result processing, but still return partial results
-            console.error("Error processing column analysis results:", processingError);
-            simplifiedResponse.processingError = `Error processing results: ${processingError instanceof Error ? processingError.message : String(processingError)}`;
-          }
-        }
-        
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(simplifiedResponse, null, 2),
-            },
-          ],
-        };
-      } catch (error) {
-        return handleToolError(error, "analyze_columns");
+    description: "Analyzes specific columns in a dataset by running statistical queries and returning computed metrics. For numeric columns, includes min/max/avg/percentiles; for string columns, includes value distribution and cardinality analysis.",
+    schema: ColumnAnalysisSchema,
+    
+    handler: async (params: z.infer<typeof ColumnAnalysisSchema>, api) => {
+      // Extract parameters
+      const { environment, dataset, columns, timeRange } = params;
+      
+      // Validate parameters
+      if (!environment) {
+        throw new Error("Missing required parameter: environment");
       }
-    }
-  };
+      if (!dataset) {
+        throw new Error("Missing required parameter: dataset");
+      }
+      if (!columns || columns.length === 0) {
+        throw new Error("Missing required parameter: columns (must be an array with at least one column name)");
+      }
+      if (columns.length > 10) {
+        throw new Error("Too many columns: maximum 10 columns can be analyzed at once");
+      }
+      
+      // Check if the columns exist in the dataset
+      const availableColumns = await api.getVisibleColumns(environment, dataset);
+      const availableColumnNames = availableColumns.map(col => col.key_name);
+      
+      const invalidColumns = columns.filter(col => !availableColumnNames.includes(col));
+      if (invalidColumns.length > 0) {
+        throw new Error(`Invalid column(s): ${invalidColumns.join(', ')} not found in dataset ${dataset}`);
+      }
+      
+      // Analyze each column
+      const results: Record<string, SimplifiedColumnAnalysis> = {};
+      
+      // Use Promise.all to run all column analyses in parallel
+      await Promise.all(columns.map(async (column) => {
+        try {
+          // We need to create a simplified analyzeColumn method from the available API methods
+          const columnResult = await executeWithRetry(async () => {
+            // Use the full analyzeColumns method but only for a single column
+            const result = await api.analyzeColumns(environment, dataset, {
+              environment,
+              dataset,
+              columns: [column],
+              timeRange
+            });
+            
+            // Extract statistics from the results
+            const stats: any = {
+              sample_count: 0,
+              unique_count: 0
+            };
+            
+            if (result.data?.results && result.data.results.length > 0) {
+              const row = result.data.results[0];
+              
+              if (row) {
+                // Get the COUNT value
+                const count = row.COUNT || 0;
+                stats.sample_count = count;
+                
+                // Extract AVG, MIN, MAX, etc. calculations if they exist
+                if (row[`AVG(${column})`] !== undefined) stats.avg = row[`AVG(${column})`];
+                if (row[`MIN(${column})`] !== undefined) stats.min = row[`MIN(${column})`];
+                if (row[`MAX(${column})`] !== undefined) stats.max = row[`MAX(${column})`];
+                if (row[`P50(${column})`] !== undefined) stats.p50 = row[`P50(${column})`];
+                if (row[`P90(${column})`] !== undefined) stats.p90 = row[`P90(${column})`];
+                if (row[`P95(${column})`] !== undefined) stats.p95 = row[`P95(${column})`];
+                if (row[`P99(${column})`] !== undefined) stats.p99 = row[`P99(${column})`];
+              }
+              
+              // Count unique values
+              const uniqueValues = new Set();
+              result.data.results.forEach(r => {
+                if (r[column] !== undefined) uniqueValues.add(r[column]);
+              });
+              stats.unique_count = uniqueValues.size;
+              
+              // Create top values
+              stats.top_values = result.data.results.slice(0, 10).map(r => ({
+                value: r[column],
+                count: r.COUNT || 0
+              }));
+            }
+            
+            return stats;
+          });
+          
+          const columnInfo = availableColumns.find(c => c.key_name === column)!;
+          const columnType = columnInfo.type;
+          
+          // Process the results based on column type
+          const processedResult: SimplifiedColumnAnalysis = {
+            name: column,
+            type: columnType,
+            sample_count: columnResult.sample_count || 0,
+            unique_count: columnResult.unique_count || 0,
+            cardinality: getCardinalityClassification(columnResult.unique_count || 0),
+          };
+          
+          // Add type-specific metrics
+          if (columnResult.top_values) {
+            processedResult.top_values = columnResult.top_values;
+          }
+          
+          if (columnType === 'float' || columnType === 'integer') {
+            // Create numeric stats with interpretations
+            const numericStats: NumericStatistics = {
+              min: columnResult.min,
+              max: columnResult.max,
+              avg: columnResult.avg, 
+              p50: columnResult.p50,
+              p90: columnResult.p90,
+              p95: columnResult.p95,
+              p99: columnResult.p99
+            };
+            
+            const statsWithInterpretation: NumericStatsWithInterpretation = {
+              ...numericStats,
+              interpretation: generateInterpretation(numericStats, column)
+            };
+            
+            processedResult.numeric_stats = statsWithInterpretation;
+          }
+          
+          // Add the result to the overall results
+          results[column] = processedResult;
+        } catch (columnError) {
+          // Handle individual column errors, but continue processing other columns
+          console.error(`Error analyzing column ${column}:`, columnError);
+          results[column] = {
+            name: column,
+            type: availableColumns.find(c => c.key_name === column)?.type || 'unknown',
+            sample_count: 0,
+            unique_count: 0,
+            cardinality: 'low',
+            error: columnError instanceof Error ? columnError.message : String(columnError)
+          };
+        }
+      }));
+      
+      // Return the analysis results
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              environment,
+              dataset,
+              time_range: timeRange || 7200, // default 2 hours
+              columns: results
+            }, null, 2),
+          },
+        ],
+      };
+    },
+    
+    errorContext: (params) => ({
+      environment: params.environment,
+      dataset: params.dataset
+    })
+  });
 }
