@@ -88,7 +88,7 @@ describe('list-columns tool', () => {
     const tool = createListColumnsTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'list_columns');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

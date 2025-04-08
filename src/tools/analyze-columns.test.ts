@@ -25,7 +25,7 @@ describe('analyze-columns tool', () => {
     const tool = createAnalyzeColumnsTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'analyze_columns');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

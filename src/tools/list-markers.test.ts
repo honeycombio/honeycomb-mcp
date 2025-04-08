@@ -113,7 +113,7 @@ describe("list-markers tool", () => {
   it("has the correct name and schema", () => {
     const tool = createListMarkersTool(api);
     expect(tool.name).toBe("list_markers");
-    expect(tool.schema).toBeDefined();
-    expect(tool.schema.environment).toBeDefined();
+    expect(tool.inputSchema).toBeDefined();
+    expect(tool.inputSchema.properties.environment).toBeDefined();
   });
 });

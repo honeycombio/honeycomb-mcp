@@ -2,6 +2,7 @@
  * Tool factory for creating standardized tool definitions
  */
 import { z } from "zod";
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { handleToolError } from "./tool-error.js";
 import { HoneycombAPI } from "../api/client.js";
 
@@ -26,12 +27,16 @@ export interface ToolErrorResponse {
 export type ToolResponseContent = ToolSuccessResponse | ToolErrorResponse;
 
 /**
- * Type for tool definition
+ * Type for tool definition following MCP specification
  */
 export interface Tool<TParams> {
   name: string;
   description: string;
-  schema: Record<string, any>;
+  inputSchema: {
+    type: "object";
+    properties: Record<string, any>;
+    required?: string[];
+  };
   handler: (params: TParams) => Promise<ToolResponseContent>;
 }
 
@@ -63,11 +68,40 @@ export function createTool<TParams>(
   api: HoneycombAPI,
   options: ToolOptions<TParams>
 ): Tool<TParams> {
+  // Convert schema to proper JSON Schema format
+  let inputSchema: {
+    type: "object";
+    properties: Record<string, any>;
+    required?: string[];
+  };
+
+  if (options.schema instanceof z.ZodType) {
+    // Use zod-to-json-schema to convert Zod schema to JSON Schema
+    const jsonSchema = zodToJsonSchema(options.schema, { 
+      target: 'jsonSchema7',
+      errorMessages: true,
+    }) as any;
+    
+    // Ensure the schema follows MCP specification
+    inputSchema = {
+      type: "object",
+      properties: jsonSchema.properties || {},
+      required: jsonSchema.required || []
+    };
+  } else {
+    // Direct JSON schema object
+    inputSchema = {
+      type: "object",
+      properties: options.schema.properties || {},
+      required: options.schema.required || []
+    };
+  }
+  
   return {
     name: options.name,
     description: options.description,
-    // Handle both Zod type schemas and regular object schemas
-    schema: options.schema instanceof z.ZodType ? (options.schema as any).shape || options.schema : options.schema,
+    // Use properly formatted JSON Schema that follows MCP specification
+    inputSchema,
     
     handler: async (params: TParams) => {
       try {

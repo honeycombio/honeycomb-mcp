@@ -11,10 +11,10 @@ import { createTool } from "../utils/tool-factory.js";
  * @returns An MCP tool object with name, schema, and handler function
  */
 export function createGetBoardTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "get_board",
     description: "Retrieves a specific board (dashboard) from a Honeycomb environment. Returns the board's queries, visualizations, and metadata.",
-    schema: GetBoardSchema.shape,
+    schema: GetBoardSchema,
     
     /**
      * Handler for the get_board tool
@@ -24,39 +24,41 @@ export function createGetBoardTool(api: HoneycombAPI) {
      * @param params.boardId - The ID of the board to retrieve
      * @returns Detailed information about the specified board
      */
-    handler: async (params: z.infer<typeof GetBoardSchema>) => {
-      try {
-        // Extract parameters
-        const { environment, boardId } = params;
-        
-        // Validate parameters
-        if (!environment || environment.trim() === '') {
-          return handleToolError(new Error("environment parameter is required"), "get_board");
-        }
-        if (!boardId || boardId.trim() === '') {
-          return handleToolError(new Error("boardId parameter is required"), "get_board");
-        }
-  
-        // Get the board from the API
-        const board = await api.getBoard(environment, boardId);
-        
-        // Return the board details
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(board, null, 2),
-            },
-          ],
-          metadata: {
-            environment,
-            boardId,
-            name: board.name
-          }
-        };
-      } catch (error) {
-        return handleToolError(error, "get_board");
+    handler: async (params: z.infer<typeof GetBoardSchema>, api) => {
+      // Extract parameters
+      const { environment, boardId } = params;
+      
+      // Validate parameters
+      if (!environment || environment.trim() === '') {
+        throw new Error("environment parameter is required");
       }
-    }
-  };
+      if (!boardId || boardId.trim() === '') {
+        throw new Error("boardId parameter is required");
+      }
+
+      // Get the board from the API
+      const board = await api.getBoard(environment, boardId);
+      
+      // Return the board details
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(board, null, 2),
+          },
+        ],
+        metadata: {
+          environment,
+          boardId,
+          name: board.name
+        }
+      };
+    },
+    
+    // Add error context function
+    errorContext: (params) => ({
+      environment: params.environment,
+      boardId: params.boardId
+    })
+  });
 }

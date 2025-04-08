@@ -39,7 +39,7 @@ describe('get-slo tool', () => {
     const tool = createGetSLOTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'get_slo');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

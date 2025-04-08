@@ -62,7 +62,7 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
     (server as any).tool(
       tool.name,
       tool.description,
-      tool.schema, 
+      tool.inputSchema, 
       async (args: Record<string, any>, extra: any) => {
         try {
           // All validation should now be handled in each tool's handler

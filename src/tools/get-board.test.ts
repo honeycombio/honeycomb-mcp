@@ -142,8 +142,8 @@ describe("get-board tool", () => {
   it("has the correct name and schema", () => {
     const tool = createGetBoardTool(api);
     expect(tool.name).toBe("get_board");
-    expect(tool.schema).toBeDefined();
-    expect(tool.schema.environment).toBeDefined();
-    expect(tool.schema.boardId).toBeDefined();
+    expect(tool.inputSchema).toBeDefined();
+    expect(tool.inputSchema.properties.environment).toBeDefined();
+    expect(tool.inputSchema.properties.boardId).toBeDefined();
   });
 });

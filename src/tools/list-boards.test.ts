@@ -136,7 +136,7 @@ describe("list-boards tool", () => {
   it("has the correct name and schema", () => {
     const tool = createListBoardsTool(api);
     expect(tool.name).toBe("list_boards");
-    expect(tool.schema).toBeDefined();
-    expect(tool.schema.environment).toBeDefined();
+    expect(tool.inputSchema).toBeDefined();
+    expect(tool.inputSchema.properties.environment).toBeDefined();
   });
 });

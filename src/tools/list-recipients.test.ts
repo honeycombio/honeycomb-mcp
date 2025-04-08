@@ -111,7 +111,7 @@ describe("list-recipients tool", () => {
   it("has the correct name and schema", () => {
     const tool = createListRecipientsTool(api);
     expect(tool.name).toBe("list_recipients");
-    expect(tool.schema).toBeDefined();
-    expect(tool.schema.environment).toBeDefined();
+    expect(tool.inputSchema).toBeDefined();
+    expect(tool.inputSchema.properties.environment).toBeDefined();
   });
 });
