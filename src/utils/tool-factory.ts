@@ -32,11 +32,7 @@ export type ToolResponseContent = ToolSuccessResponse | ToolErrorResponse;
 export interface Tool<TParams> {
   name: string;
   description: string;
-  inputSchema: {
-    type: "object";
-    properties: Record<string, any>;
-    required?: string[];
-  };
+  inputSchema: Record<string, any>; // JSON Schema object
   handler: (params: TParams) => Promise<ToolResponseContent>;
 }
 
@@ -68,34 +64,15 @@ export function createTool<TParams>(
   api: HoneycombAPI,
   options: ToolOptions<TParams>
 ): Tool<TParams> {
-  // Convert schema to proper JSON Schema format
-  let inputSchema: {
-    type: "object";
-    properties: Record<string, any>;
-    required?: string[];
-  };
-
-  if (options.schema instanceof z.ZodType) {
-    // Use zod-to-json-schema to convert Zod schema to JSON Schema
-    const jsonSchema = zodToJsonSchema(options.schema, { 
-      target: 'jsonSchema7',
-      errorMessages: true,
-    }) as any;
-    
-    // Ensure the schema follows MCP specification
-    inputSchema = {
-      type: "object",
-      properties: jsonSchema.properties || {},
-      required: jsonSchema.required || []
-    };
-  } else {
-    // Direct JSON schema object
-    inputSchema = {
-      type: "object",
-      properties: options.schema.properties || {},
-      required: options.schema.required || []
-    };
-  }
+  // Convert Zod schema to JSON Schema directly using zodToJsonSchema
+  const inputSchema = options.schema instanceof z.ZodType 
+    ? zodToJsonSchema(options.schema, {
+        // Target JSONSchema7 for MCP compatibility
+        target: 'jsonSchema7',
+        // Include error messages from Zod validation
+        errorMessages: true,
+      })
+    : options.schema;
   
   return {
     name: options.name,
