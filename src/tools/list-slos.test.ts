@@ -48,7 +48,7 @@ describe('list-slos tool', () => {
     const tool = createListSLOsTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'list_slos');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

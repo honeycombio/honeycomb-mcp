@@ -3,6 +3,9 @@ import { z } from "zod";
 
 /**
  * Handles errors from tool execution and returns a formatted error response
+ * 
+ * This follows the required format for tool errors:
+ * { isError: true, content: [{ type: "text", text: "Error message" }] }
  */
 export async function handleToolError(
   error: unknown,
@@ -11,17 +14,20 @@ export async function handleToolError(
     suppressConsole?: boolean;
     environment?: string;
     dataset?: string;
+    api?: any;
   } = {}
 ): Promise<{
+  isError: true;
   content: { type: "text"; text: string }[];
-  error: { message: string; };
 }> {
   let errorMessage = "Unknown error occurred";
-  let suggestions: string[] = [];
+  let errorDetails: Record<string, any> = {};
 
   if (error instanceof HoneycombError) {
     // Use the enhanced error message system
-    errorMessage = error.getFormattedMessage();
+    // Get a clean message without duplicating technical details
+    errorMessage = error.message;
+    errorDetails = error.details;
   } else if (error instanceof z.ZodError) {
     // For Zod validation errors, create a validation error with context
     const validationError = HoneycombError.createValidationError(
@@ -29,9 +35,18 @@ export async function handleToolError(
       {
         environment: options.environment,
         dataset: options.dataset
-      }
+      },
+      options.api
     );
-    errorMessage = validationError.getFormattedMessage();
+    // Add the Zod errors as details
+    validationError.addDetails({
+      zodErrors: error.errors.map(err => ({
+        path: err.path.join('.'),
+        message: err.message,
+        code: err.code,
+      }))
+    });
+    errorMessage = validationError.message;
   } else if (error instanceof Error) {
     errorMessage = error.message;
   }
@@ -41,22 +56,17 @@ export async function handleToolError(
     console.error(`Tool '${toolName}' failed:`, error);
   }
 
-  let helpText = `Failed to execute tool '${toolName}': ${errorMessage}\n\n` +
-    `Please verify:\n` +
-    `- The environment name is correct and configured via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY\n` +
-    `- Your API key is valid\n` +
-    `- The dataset exists and you have access to it\n` +
-    `- Your query parameters are valid\n`;
+  // Format the error message for the content text - maintain the expected format for tests
+  const displayMessage = `Failed to execute tool '${toolName}': ${errorMessage}`;
 
+  // Return the error in the exact format required by the tool API
   return {
+    isError: true,
     content: [
       {
         type: "text",
-        text: helpText,
+        text: displayMessage,
       },
-    ],
-    error: {
-      message: errorMessage
-    }
+    ]
   };
 }

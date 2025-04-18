@@ -30,7 +30,7 @@ describe('list-datasets tool', () => {
     const tool = createListDatasetsTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'list_datasets');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

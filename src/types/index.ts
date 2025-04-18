@@ -9,4 +9,6 @@ export * from "./column.js";
 export * from "./slo.js";
 export * from "./api.js";
 export * from "./trigger.js";
-export * from "./schema.js";
+export * from "./base-schemas.js";
+export * from "./query-schemas.js";
+export * from "./resource-schemas.js";

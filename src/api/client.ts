@@ -4,7 +4,8 @@ import {
   AnalysisQuery,
   QueryCalculation,
 } from "../types/query.js";
-import { QueryToolSchema, ColumnAnalysisSchema } from "../types/schema.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
+import { ColumnAnalysisSchema } from "../types/query-schemas.js";
 import { HoneycombError } from "../utils/errors.js";
 import { Column } from "../types/column.js";
 import { Dataset, AuthResponse } from "../types/api.js";
@@ -170,37 +171,205 @@ export class HoneycombAPI {
 
     if (response.status === 429) {
       let errorMessage = "Rate limit exceeded";
+      let details: Record<string, any> = {};
+      
       if (retryAfter) {
         errorMessage += `. Please try again after ${retryAfter}`;
+        details.retryAfter = retryAfter;
       }
       if (rateLimit) {
         errorMessage += `. ${rateLimit}`;
+        details.rateLimit = rateLimit;
       }
-      throw new HoneycombError(429, errorMessage);
+      if (rateLimitPolicy) {
+        details.rateLimitPolicy = rateLimitPolicy;
+      }
+      
+      // For rate limit errors, provide specific guidance on what to do
+      const suggestions = [
+        `Your request was rate limited. Please try again after ${retryAfter || 'the specified time'}.`,
+        `Consider reducing the frequency of your requests.`
+      ];
+      
+      throw new HoneycombError(429, errorMessage, suggestions, details);
     }
 
     if (!response.ok) {
       // Try to get the error message from the response body
       let errorMessage = response.statusText;
+      let errorDetails: Record<string, any> = {
+        statusCode: response.status,
+        statusText: response.statusText,
+        url: url
+      };
+      
+      // Get content type to help determine parsing strategy
+      const contentType = response.headers.get('Content-Type') || '';
+      errorDetails.contentType = contentType;
+      
+      // Create array to hold error suggestion messages
+      let validationSuggestions: string[] = [];
+      
       try {
-        const errorBody = await response.json() as { error?: string } | string;
-        if (typeof errorBody === 'object' && errorBody.error) {
-          errorMessage = errorBody.error;
-        } else if (typeof errorBody === 'string') {
-          errorMessage = errorBody;
+        // Parse response body
+        const body = await response.json() as Record<string, any>;
+        
+        // Parse the response body based on content type or status code
+        if (contentType.includes('application/problem+json') || response.status === 422) {
+          // DetailedError format (RFC7807) or Honeycomb validation error format
+          errorDetails.rawResponse = body;
+          
+          // Extract core error message
+          errorMessage = body.error || body.title || errorMessage;
+          
+          // Store all error details
+          errorDetails = {
+            ...errorDetails,
+            type: body.type || undefined,
+            title: body.title || undefined,
+            detail: body.detail || undefined,
+            instance: body.instance || undefined
+          };
+          
+          // Special handling for detailed validation errors (422)
+          if (body.type_detail && Array.isArray(body.type_detail) && body.type_detail.length > 0) {
+            errorDetails.validationErrors = body.type_detail;
+            
+            // Add specific validation errors to suggestions
+            const validationInfo = body.type_detail.map((detail: any) => {
+              if (detail.field) {
+                return `Field '${detail.field}': ${detail.description || "invalid"} (code: ${detail.code || "unknown"})`;
+              } else {
+                // For validation errors without a field property (like the example above)
+                return `${detail.description || "Invalid input"} (code: ${detail.code || "unknown"})`;
+              }
+            });
+            
+            if (validationInfo.length > 0) {
+              validationSuggestions.push(...validationInfo);
+            }
+          }
+        } else if (contentType.includes('application/vnd.api+json')) {
+          // JSONAPIError format
+          errorDetails.rawResponse = body;
+          
+          if (body.errors && Array.isArray(body.errors) && body.errors.length > 0) {
+            const firstError = body.errors[0] as Record<string, any>;
+            errorMessage = firstError.detail || firstError.title || 
+                          (firstError.code ? `Error code: ${firstError.code}` : errorMessage);
+            errorDetails = {
+              ...errorDetails,
+              errorId: firstError.id || undefined,
+              code: firstError.code || undefined,
+              title: firstError.title || undefined,
+              detail: firstError.detail || undefined,
+              allErrors: body.errors
+            };
+          }
+        } else {
+          // Simple Error format or other JSON (default)
+          errorDetails.rawResponse = body;
+          
+          if (typeof body === 'object' && body !== null) {
+            if ('error' in body && body.error) {
+              errorMessage = String(body.error);
+            } else if ('message' in body && body.message) {
+              errorMessage = String(body.message);
+            }
+            
+            // Capture any validation errors
+            if ('validation_errors' in body && body.validation_errors) {
+              errorDetails.validationErrors = body.validation_errors;
+            }
+          } else if (typeof body === 'string') {
+            errorMessage = body;
+          }
+          // Use statusText if we cannot determine a better error message
         }
       } catch (e) {
-        // If we can't parse the error body, just use the status text
+        // If we can't parse JSON, try to get text content
+        try {
+          const textContent = await response.clone().text();
+          if (textContent) {
+            errorMessage = textContent.length > 200 
+              ? textContent.substring(0, 200) + '...' 
+              : textContent;
+            errorDetails.textContent = textContent;
+          }
+        } catch (textError) {
+          // If all else fails, stay with statusText
+          errorDetails.parseError = e instanceof Error ? e.message : 'Unknown parsing error';
+        }
       }
 
-      // Include rate limit info in error message if available
+      // Include rate limit info
       if (rateLimit) {
-        errorMessage += ` (Rate limit: ${rateLimit})`;
+        errorDetails.rateLimit = rateLimit;
+      }
+      if (rateLimitPolicy) {
+        errorDetails.rateLimitPolicy = rateLimitPolicy;
+      }
+      if (retryAfter) {
+        errorDetails.retryAfter = retryAfter;
       }
 
+      // Build error suggestions based on response status
+      const suggestions: string[] = [...validationSuggestions];
+      
+      if (response.status === 401) {
+        suggestions.push(`Your API key for environment "${environment}" is invalid or expired.`);
+        suggestions.push(`Check the API key configuration via HONEYCOMB_API_KEY or HONEYCOMB_ENV_*_API_KEY.`);
+      } else if (response.status === 403) {
+        suggestions.push(`Your API key for environment "${environment}" doesn't have permission to perform this operation.`);
+        const availablePermissions = this.environments.get(environment)?.permissions;
+        if (availablePermissions) {
+          const permissionsList = Object.entries(availablePermissions)
+            .filter(([_, value]) => value === true)
+            .map(([key]) => key)
+            .join(", ");
+          suggestions.push(`Current permissions: ${permissionsList || "none"}`);
+        }
+      } else if (response.status === 404) {
+        if (path.includes('/datasets/')) {
+          const pathParts = path.split('/datasets/');
+          if (pathParts.length > 1 && pathParts[1]) {
+            const datasetPath = pathParts[1];
+            const datasetSlug = datasetPath.split('/')[0] || 'unknown';
+            suggestions.push(`The dataset "${datasetSlug}" was not found in environment "${environment}".`);
+            suggestions.push(`Check that the dataset name is correct and that it exists in this environment.`);
+          } else {
+            suggestions.push(`The dataset was not found in environment "${environment}".`);
+            suggestions.push(`Check that the dataset name is correct and that it exists in this environment.`);
+          }
+        } else {
+          suggestions.push(`The requested resource was not found.`);
+          suggestions.push(`Check that all IDs and resource names in your request are correct.`);
+        }
+      } else if (response.status === 422) {
+        suggestions.push(`Your request contains invalid parameters.`);
+        
+        // Add specific validation error information to suggestions
+        if (errorDetails.validationErrors && Array.isArray(errorDetails.validationErrors)) {
+          errorDetails.validationErrors.forEach((detail: any) => {
+            if (detail.description) {
+              if (detail.field) {
+                suggestions.push(`Field '${detail.field}': ${detail.description}`);
+              } else {
+                suggestions.push(`${detail.description}`);
+              }
+            }
+          });
+        }
+      } else if (response.status >= 500) {
+        suggestions.push(`There was a server-side issue with the Honeycomb API.`);
+        suggestions.push(`This is likely a temporary issue. Please try again later.`);
+      }
+      
       throw new HoneycombError(
         response.status,
         `Honeycomb API error: ${errorMessage}`,
+        suggestions,
+        errorDetails
       );
     }
 
@@ -488,14 +657,69 @@ export class HoneycombAPI {
       if (error instanceof HoneycombError) {
         // For validation errors, enhance with context
         if (error.statusCode === 422) {
+          // For validation errors, check if we have detailed validation info
+          const errorDetails: Record<string, any> = {};
+          
+          // If error contains the Honeycomb validation format, extract it
+          if (error.details) {
+            // Pass through all error details, including validationErrors, rawResponse, etc.
+            Object.assign(errorDetails, error.details);
+            
+            // Make sure we properly extract the nested validation errors for display
+            if (error.details.rawResponse && 
+                error.details.rawResponse.type_detail && 
+                Array.isArray(error.details.rawResponse.type_detail)) {
+              
+              try {
+                // Create a deep copy of the validation errors to avoid reference issues
+                const validationErrors = JSON.parse(JSON.stringify(error.details.rawResponse.type_detail));
+                
+                // Only set if we have valid errors to avoid empty arrays
+                if (validationErrors.length > 0) {
+                  errorDetails.validationErrors = validationErrors;
+                  
+                  // Log validation errors for debugging (remove in production)
+                  console.debug("Extracted validation errors:", 
+                    validationErrors.map((err: any) => 
+                      err.description ? 
+                        (err.field ? `${err.field}: ${err.description}` : err.description) 
+                        : JSON.stringify(err)
+                    ).join(', ')
+                  );
+                }
+              } catch (parseError) {
+                // If JSON serialization fails, try a more direct approach
+                console.error("Error serializing validation details:", parseError);
+                
+                // Fall back to a direct copy with manual extraction of important fields
+                errorDetails.validationErrors = error.details.rawResponse.type_detail.map((detail: any) => {
+                  if (detail && typeof detail === 'object') {
+                    return {
+                      field: detail.field || null,
+                      code: detail.code || 'unknown',
+                      description: detail.description || JSON.stringify(detail)
+                    };
+                  }
+                  return { description: String(detail) };
+                });
+              }
+            }
+          }
+          
+          // Include API route in the error message
+          const apiRoute = `/1/queries/${datasetSlug}`;
+          
+          // Create detailed validation error with context and validation details
           throw HoneycombError.createValidationError(
-            error.message,
+            `${error.message} (API route: ${apiRoute})`,
             {
               environment,
               dataset: datasetSlug,
               granularity: params.granularity,
-              api_route: `/1/queries/${datasetSlug}`
-            }
+              api_route: apiRoute
+            },
+            this,
+            errorDetails
           );
         }
         // For other HoneycombErrors, just rethrow them with route info
@@ -505,7 +729,16 @@ export class HoneycombAPI {
       
       // For non-Honeycomb errors, wrap in a QueryError with route info
       throw new QueryError(
-        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"} (API route: /1/queries/${datasetSlug})`
+        `Analysis query failed: ${error instanceof Error ? error.message : "Unknown error"} (API route: /1/queries/${datasetSlug})`,
+        [],
+        {
+          errorType: error instanceof Error ? error.name : 'Unknown',
+          originalMessage: error instanceof Error ? error.message : 'Unknown error',
+          environment,
+          dataset: datasetSlug,
+          route: `/1/queries/${datasetSlug}`,
+          parameters: params
+        }
       );
     }
   }

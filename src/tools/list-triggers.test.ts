@@ -72,7 +72,7 @@ describe('list-triggers tool', () => {
     const tool = createListTriggersTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'list_triggers');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

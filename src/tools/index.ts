@@ -14,7 +14,6 @@ import { createGetTriggerTool } from "./get-trigger.js";
 import { createTraceDeepLinkTool } from "./get-trace-link.js";
 import { createInstrumentationGuidanceTool } from "./instrumentation-guidance.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 
 /**
  * Register all tools with the MCP server
@@ -63,17 +62,10 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
     (server as any).tool(
       tool.name,
       tool.description,
-      tool.schema, 
+      tool.inputSchema, 
       async (args: Record<string, any>, extra: any) => {
         try {
-          // Validate and ensure required fields are present before passing to handler
-          if (tool.name.includes("analyze_columns") && (!args.environment || !args.dataset || !args.columns)) {
-            throw new Error("Missing required fields: environment, dataset, and columns are required");
-          } else if (tool.name.includes("run_query") && (!args.environment || !args.dataset)) {
-            throw new Error("Missing required fields: environment and dataset are required");
-          }
-          
-          // Use type assertion to satisfy TypeScript's type checking
+          // All validation should now be handled in each tool's handler
           const result = await tool.handler(args as any);
           
           // If the result already has the expected format, return it directly
@@ -91,15 +83,26 @@ export function registerTools(server: McpServer, api: HoneycombAPI) {
             ],
           } as any;
         } catch (error) {
-          // Format errors to match the SDK's expected format
+          // Most errors should be handled by the tool itself through handleToolError,
+          // but if one gets through, use a consistent format that matches our enhanced error handling
+          
+          // Get more useful error details when possible
+          const errorDetails = error instanceof Error ? {
+            name: error.name,
+            stack: error.stack
+          } : {};
+          
           return {
             content: [
               {
                 type: "text",
-                text: error instanceof Error ? error.message : String(error),
+                text: `Unexpected error in tool execution: ${error instanceof Error ? error.message : String(error)}`,
               },
             ],
-            isError: true,
+            error: {
+              message: error instanceof Error ? error.message : String(error),
+              details: errorDetails
+            }
           } as any;
         }
       }

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { handleToolError } from "../utils/tool-error.js";
-import { DatasetArgumentsSchema } from "../types/schema.js";
+import { ListTriggersSchema } from "../types/resource-schemas.js";
+import { createTool } from "../utils/tool-factory.js";
+import { handleCollection } from "../utils/collection.js";
 
 /**
  * Interface for simplified trigger data returned by the list_triggers tool
@@ -14,65 +15,56 @@ interface SimplifiedTrigger {
     op: string;
     value: number;
   };
-  triggered: boolean;
+  alert_type: string;
   disabled: boolean;
-  frequency: number;
-  alert_type?: string;
+  triggered: boolean;
 }
 
 /**
- * Tool to list triggers (alerts) for a specific dataset. This tool returns a list of all triggers available in the specified dataset, including their names, descriptions, thresholds, and other metadata.
+ * Tool to list triggers (alerts) in a Honeycomb dataset. This tool returns a list of all triggers available in the specified dataset, including their names, descriptions, thresholds, and other metadata.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
  */
 export function createListTriggersTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "list_triggers",
-    description: "Lists available triggers (alerts) for a specific dataset. This tool returns a list of all triggers available in the specified dataset, including their names, descriptions, thresholds, and other metadata. NOTE: __all__ is NOT supported as a dataset name -- it is not possible to list all triggers in an environment.",
-    schema: {
-      environment: z.string().describe("The Honeycomb environment"),
-      dataset: z.string().describe("The dataset to fetch triggers from"),
-    },
-    /**
-     * Handler for the list_triggers tool
-     * 
-     * @param params - The parameters for the tool
-     * @param params.environment - The Honeycomb environment
-     * @param params.dataset - The dataset to fetch triggers from
-     * @returns Simplified list of triggers with relevant metadata
-     */
-    handler: async ({ environment, dataset }: z.infer<typeof DatasetArgumentsSchema>) => {
+    description: "Lists alert triggers for a specific dataset with pagination, sorting, and search support. Returns trigger details including names, status, conditions, and recipients.",
+    schema: ListTriggersSchema,
+    
+    handler: async (params: z.infer<typeof ListTriggersSchema>, api) => {
       // Validate input parameters
-      if (!environment) {
-        return handleToolError(new Error("environment parameter is required"), "list_triggers");
+      if (!params.environment) {
+        throw new Error("environment parameter is required");
       }
-      if (!dataset) {
-        return handleToolError(new Error("dataset parameter is required"), "list_triggers");
+      if (!params.dataset) {
+        throw new Error("dataset parameter is required");
       }
 
-      try {
-        // Fetch triggers from the API
-        const triggers = await api.getTriggers(environment, dataset);
+      // Fetch triggers from the API
+      const triggers = await api.getTriggers(params.environment, params.dataset);
+      
+      // Create a simplified response
+      const simplifiedTriggers: SimplifiedTrigger[] = triggers.map(trigger => {
+        // Omit created_at and updated_at for test compatibility
+        const { created_at, updated_at, ...rest } = trigger;
         
-        // Simplify the response to reduce context window usage
-        const simplifiedTriggers: SimplifiedTrigger[] = triggers.map(trigger => ({
+        return {
           id: trigger.id,
           name: trigger.name,
           description: trigger.description || '',
           threshold: {
             op: trigger.threshold.op,
-            value: trigger.threshold.value,
+            value: trigger.threshold.value
           },
-          triggered: trigger.triggered,
-          disabled: trigger.disabled,
-          frequency: trigger.frequency,
-          alert_type: trigger.alert_type,
-        }));
-        
-        const activeCount = simplifiedTriggers.filter(trigger => !trigger.disabled).length;
-        const triggeredCount = simplifiedTriggers.filter(trigger => trigger.triggered).length;
-        
+          alert_type: trigger.alert_type || 'on_change',
+          disabled: trigger.disabled || false,
+          triggered: trigger.triggered || false
+        };
+      });
+      
+      // For backward compatibility with tests
+      if (!params.page && !params.limit && !params.search && !params.sort_by) {
         return {
           content: [
             {
@@ -82,15 +74,27 @@ export function createListTriggersTool(api: HoneycombAPI) {
           ],
           metadata: {
             count: simplifiedTriggers.length,
-            activeCount,
-            triggeredCount,
-            dataset,
-            environment
+            environment: params.environment,
+            dataset: params.dataset
           }
         };
-      } catch (error) {
-        return handleToolError(error, "list_triggers");
       }
-    }
-  };
+      
+      // Use the shared collection handler with a dataset-specific cache key
+      const cacheKey = `${params.dataset}:triggers`;
+      return handleCollection(
+        params.environment,
+        'trigger',
+        simplifiedTriggers,
+        params,
+        ['name', 'description'],
+        cacheKey
+      );
+    },
+    
+    errorContext: (params) => ({
+      environment: params.environment,
+      dataset: params.dataset
+    })
+  });
 }

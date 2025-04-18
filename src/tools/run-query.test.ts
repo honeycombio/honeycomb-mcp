@@ -27,7 +27,7 @@ describe('run-query tool', () => {
     const tool = createRunQueryTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'run_query');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

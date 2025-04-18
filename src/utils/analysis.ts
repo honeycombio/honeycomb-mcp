@@ -1,13 +1,13 @@
 import { CardinalityClassification, NumericStatistics } from "../types/analysis.js";
 
-
 /**
  * Determine cardinality classification based on the number of unique values
  * 
  * @param uniqueCount - The number of unique values in the dataset
+ * @param sampleCount - Optional total sample count for ratio calculation
  * @returns A classification of the cardinality (low, medium, high, very high)
  */
-export function getCardinalityClassification(uniqueCount: number): CardinalityClassification {
+export function getCardinalityClassification(uniqueCount: number, sampleCount?: number): CardinalityClassification {
   if (uniqueCount <= 10) return 'low';
   if (uniqueCount <= 100) return 'medium';
   if (uniqueCount <= 1000) return 'high';
@@ -16,6 +16,10 @@ export function getCardinalityClassification(uniqueCount: number): CardinalityCl
 
 /**
  * Generate interpretation text for numeric statistics based on Honeycomb documentation
+ * 
+ * @param stats - Numeric statistics to interpret
+ * @param columnName - Name of the column being analyzed
+ * @returns Human-readable interpretation of the statistics
  */
 export function generateInterpretation(stats: NumericStatistics, columnName: string): string {
   const interpretations = [];

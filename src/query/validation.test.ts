@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { validateQuery } from "./validation.js";
-import { QueryCalculationSchema, OrderDirectionSchema, HavingSchema } from "../types/schema.js";
+import { QueryCalculationSchema } from "../types/base-schemas.js";
+import { OrderDirectionSchema } from "../types/base-schemas.js";
+import { HavingSchema } from "../types/base-schemas.js";
 import { z } from "zod";
 
 // Define types for the various enums to ensure type safety

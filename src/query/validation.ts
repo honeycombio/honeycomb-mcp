@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { QueryToolSchema } from "../types/schema.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
 import { QueryError } from "../utils/errors.js";
 
 function validateTimeParameters(params: z.infer<typeof QueryToolSchema>): void {

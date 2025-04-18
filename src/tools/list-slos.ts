@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { HoneycombAPI } from "../api/client.js";
-import { handleToolError } from "../utils/tool-error.js";
-import { DatasetArgumentsSchema } from "../types/schema.js";
+import { ListSLOsSchema } from "../types/resource-schemas.js";
+import { createTool } from "../utils/tool-factory.js";
+import { handleCollection } from "../utils/collection.js";
 
 /**
  * Interface for simplified SLO data returned by the list_slos tool
@@ -15,49 +16,40 @@ interface SimplifiedSLO {
 }
 
 /**
- * Tool to list SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed.
+ * Tool to list service level objectives (SLOs) in a Honeycomb dataset. This tool returns a list of all SLOs available in the specified dataset, including their names, descriptions, time periods, and target per million events expected to succeed.
  * 
  * @param api - The Honeycomb API client
  * @returns An MCP tool object with name, schema, and handler function
  */
 export function createListSLOsTool(api: HoneycombAPI) {
-  return {
+  return createTool(api, {
     name: "list_slos",
-    description: "Lists available SLOs (Service Level Objectives) for a specific dataset. This tool returns a list of all SLOs available in the specified environment, including their names, descriptions, time periods, and target per million events expected to succeed. NOTE: __all__ is NOT supported as a dataset name -- it is not possible to list all SLOs in an environment.",
-    schema: {
-      environment: z.string().describe("The Honeycomb environment"),
-      dataset: z.string().describe("The dataset to fetch SLOs from"),
-    },
-    /**
-     * Handler for the list_slos tool
-     * 
-     * @param params - The parameters for the tool
-     * @param params.environment - The Honeycomb environment
-     * @param params.dataset - The dataset to fetch SLOs from
-     * @returns Simplified list of SLOs with relevant metadata
-     */
-    handler: async ({ environment, dataset }: z.infer<typeof DatasetArgumentsSchema>) => {
+    description: "Lists Service Level Objectives for a specific dataset with pagination, sorting, and search support. Returns SLO details including names, targets, and time periods.",
+    schema: ListSLOsSchema,
+    
+    handler: async (params: z.infer<typeof ListSLOsSchema>, api) => {
       // Validate input parameters
-      if (!environment) {
-        return handleToolError(new Error("environment parameter is required"), "list_slos");
+      if (!params.environment) {
+        throw new Error("environment parameter is required");
       }
-      if (!dataset) {
-        return handleToolError(new Error("dataset parameter is required"), "list_slos");
+      if (!params.dataset) {
+        throw new Error("dataset parameter is required");
       }
 
-      try {
-        // Fetch SLOs from the API
-        const slos = await api.getSLOs(environment, dataset);
-        
-        // Simplify the response to reduce context window usage
-        const simplifiedSLOs: SimplifiedSLO[] = slos.map(slo => ({
-          id: slo.id,
-          name: slo.name,
-          description: slo.description || '',
-          time_period_days: slo.time_period_days,
-          target_per_million: slo.target_per_million,
-        }));
-        
+      // Fetch SLOs from the API
+      const slos = await api.getSLOs(params.environment, params.dataset);
+      
+      // Create a simplified response without created_at and other fields
+      const simplifiedSLOs: SimplifiedSLO[] = slos.map(slo => ({
+        id: slo.id,
+        name: slo.name,
+        description: slo.description || '',
+        time_period_days: slo.time_period_days,
+        target_per_million: slo.target_per_million
+      }));
+      
+      // For backward compatibility with tests
+      if (!params.page && !params.limit && !params.search && !params.sort_by) {
         return {
           content: [
             {
@@ -67,13 +59,27 @@ export function createListSLOsTool(api: HoneycombAPI) {
           ],
           metadata: {
             count: simplifiedSLOs.length,
-            dataset,
-            environment
+            environment: params.environment,
+            dataset: params.dataset
           }
         };
-      } catch (error) {
-        return handleToolError(error, "list_slos");
       }
-    }
-  };
+      
+      // Use the shared collection handler with a dataset-specific cache key
+      const cacheKey = `${params.dataset}:slos`;
+      return handleCollection(
+        params.environment,
+        'slo',
+        simplifiedSLOs,
+        params,
+        ['name', 'description'],
+        cacheKey
+      );
+    },
+    
+    errorContext: (params) => ({
+      environment: params.environment,
+      dataset: params.dataset
+    })
+  });
 }

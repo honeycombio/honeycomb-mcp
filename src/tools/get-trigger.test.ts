@@ -55,7 +55,7 @@ describe('get-trigger tool', () => {
     const tool = createGetTriggerTool(mockApi as any);
     
     expect(tool).toHaveProperty('name', 'get_trigger');
-    expect(tool).toHaveProperty('schema');
+    expect(tool).toHaveProperty('inputSchema');
     expect(tool).toHaveProperty('handler');
     expect(typeof tool.handler).toBe('function');
   });

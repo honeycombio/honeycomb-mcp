@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { summarizeResults } from "./transformations.js";
 import { QueryResultValue } from "../types/query.js";
 import { z } from "zod";
-import { QueryToolSchema } from "../types/schema.js";
+import { QueryToolSchema } from "../types/query-schemas.js";
 
 describe("Response transformations", () => {
   describe("summarizeResults", () => {
