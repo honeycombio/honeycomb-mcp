@@ -12,8 +12,8 @@ importers:
         specifier: 0.1.2
         version: 0.1.2
       zod:
-        specifier: ^3.24.2
-        version: 3.24.2
+        specifier: ^3.24.3
+        version: 3.24.3
     devDependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
@@ -47,7 +47,7 @@ importers:
         version: 4.2.0
       openai:
         specifier: ^4.91.0
-        version: 4.91.1(ws@8.18.1)(zod@3.24.2)
+        version: 4.91.1(ws@8.18.1)(zod@3.24.3)
       tsx:
         specifier: ^4.7.0
         version: 4.19.3
@@ -1262,8 +1262,8 @@ packages:
     peerDependencies:
       zod: ^3.24.1
 
-  zod@3.24.2:
-    resolution: {integrity: sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==}
+  zod@3.24.3:
+    resolution: {integrity: sha512-HhY1oqzWCQWuUqvBFnsyrtZRhyPeR7SUGv+C4+MsisMuVfSPx8HpwWqH8tRahSlt6M3PiFAcoeFhZAqIXTxoSg==}
 
 snapshots:
 
@@ -1422,8 +1422,8 @@ snapshots:
       express-rate-limit: 7.5.0(express@5.1.0)
       pkce-challenge: 4.1.0
       raw-body: 3.0.0
-      zod: 3.24.2
-      zod-to-json-schema: 3.24.5(zod@3.24.2)
+      zod: 3.24.3
+      zod-to-json-schema: 3.24.5(zod@3.24.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -2085,7 +2085,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@4.91.1(ws@8.18.1)(zod@3.24.2):
+  openai@4.91.1(ws@8.18.1)(zod@3.24.3):
     dependencies:
       '@types/node': 18.19.86
       '@types/node-fetch': 2.6.12
@@ -2096,7 +2096,7 @@ snapshots:
       node-fetch: 2.7.0
     optionalDependencies:
       ws: 8.18.1
-      zod: 3.24.2
+      zod: 3.24.3
     transitivePeerDependencies:
       - encoding
 
@@ -2434,8 +2434,8 @@ snapshots:
 
   ws@8.18.1: {}
 
-  zod-to-json-schema@3.24.5(zod@3.24.2):
+  zod-to-json-schema@3.24.5(zod@3.24.3):
     dependencies:
-      zod: 3.24.2
+      zod: 3.24.3
 
-  zod@3.24.2: {}
+  zod@3.24.3: {}
