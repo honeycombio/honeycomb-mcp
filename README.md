@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/honeycombio-honeycomb-mcp-badge.png)](https://mseep.ai/app/honeycombio-honeycomb-mcp)
+
 # Honeycomb MCP
 
 > ⚠️ **DEPRECATED**: This self-hosted MCP server is deprecated. Please migrate to the hosted Honeycomb Model Context Protocol (MCP) solution at [Honeycomb MCP Documentation](https://docs.honeycomb.io/integrations/mcp/).
