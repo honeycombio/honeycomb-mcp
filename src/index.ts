@@ -54,13 +54,10 @@ async function main() {
     
     const api = new HoneycombAPI(config);
 
-    // Create server with proper initialization options and capabilities
+    // Create server with proper initialization options
     const server = new McpServer({
       name: "honeycomb",
       version: "1.0.0",
-      capabilities: {
-        prompts: {} // Register prompts capability
-      }
     });
 
     // Add a small delay to ensure the server is fully initialized before registering tools
