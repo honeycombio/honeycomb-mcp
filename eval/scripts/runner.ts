@@ -87,7 +87,7 @@ export class EvalRunner {
       // Create client
       this.client = new MCPClient({
         name: "honeycomb-mcp-eval",
-        version: "1.0.0"
+        version: "1.0.0",
       });
       
       // Create a StdioClientTransport with the command and args
