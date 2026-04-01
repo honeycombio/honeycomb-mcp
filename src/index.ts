@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { loadConfig } from "./config.js";
 import { HoneycombAPI } from "./api/client.js";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { registerResources } from "./resources/index.js";
 import { registerTools } from "./tools/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -112,7 +113,8 @@ async function main() {
 }
 
 // Run main with proper error handling
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use fileURLToPath to handle URL-encoded characters (e.g., spaces as %20)
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     console.error("Fatal error in main():", error);
     process.exit(1);
